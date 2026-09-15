@@ -1,0 +1,8 @@
+node_modules/
+dist/
+coverage/
+.runs/
+.env
+.env.*
+!.env.example
+complete_experiment_bundle.txt

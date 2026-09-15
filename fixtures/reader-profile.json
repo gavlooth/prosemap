@@ -1,0 +1,6 @@
+{
+  "id": "math-phd-no-specialist-physics",
+  "assumedKnowledge": ["graduate mathematics", "linear algebra", "basic probability"],
+  "notAssumedKnowledge": ["specialist condensed-matter physics", "anyon theory", "experimental defect-spin practice"],
+  "objective": "Follow the document's definitions, mechanisms, and evidence well enough to evaluate its central argument."
+}

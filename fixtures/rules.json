@@ -1,0 +1,22 @@
+{
+  "rules": [
+    {"id": "structure.heading-depth", "version": "1"},
+    {"id": "structure.heading-transition", "version": "1"},
+    {"id": "structure.duplicate-id", "version": "1"},
+    {"id": "structure.expanded-duplicate", "version": "1"},
+    {"id": "reference.unresolved", "version": "1"},
+    {"id": "reference.route-edge", "version": "1"},
+    {"id": "terminology.definition", "version": "1"},
+    {"id": "terminology.introduction-density", "version": "1"},
+    {"id": "notation.case-similar", "version": "1"},
+    {"id": "formula.ari", "version": "1"},
+    {"id": "source.escaped-pipe", "version": "1"},
+    {"id": "source.ascii-diagram", "version": "1"},
+    {"id": "cohesion.adjacent-overlap", "version": "1"}
+  ],
+  "thresholds": {
+    "headingDepth": 4,
+    "termIntroductionsPerBlock": 3,
+    "formulaMinimumWords": 100
+  }
+}

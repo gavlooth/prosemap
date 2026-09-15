@@ -1,0 +1,57 @@
+{
+  "schemaVersion": "1",
+  "corpusId": "prosemap-initial-corpus",
+  "frozenAt": "2026-09-16T00:00:00.000Z",
+  "provenance": {
+    "repository": "../christos-cloudflare-page",
+    "exportSnapshot": {
+      "revision": "f18a599279e8e74e6acba32701e5ec50b7377b55",
+      "sourcePath": "notes/pages/defects-to-topological-qubits.html",
+      "sha256": "74f42364f5c57e3e58bdf49cd4f8e15b9035901a13223f498e23300da3f99f0d",
+      "exportManifestPath": "notes/qubits-exports.json"
+    },
+    "manualAudit": {
+      "path": "notes/topological-qubits-readability-report.md",
+      "status": "unlinked-to-immutable-source"
+    },
+    "sentenceAudit": {
+      "summaryPath": ".agents/qubits-sentence-audit-summary.json",
+      "recordsPath": ".agents/qubits-sentence-audit.jsonl",
+      "sourceArchivePath": ".agents/qubits-sentence-audit-work.zip",
+      "sourceSha256": "704021172f8c15bd25222428bd0ef59bb0b3bf47130e224854cc0aac3f61d203",
+      "status": "paused_by_user_partial",
+      "reviewedRecords": 11407,
+      "eligibleRecords": 14187
+    }
+  },
+  "documents": [
+    {
+      "id": "calibration-problematic",
+      "split": "calibration",
+      "path": "fixtures/calibration/problematic.html",
+      "expectedRuleIds": [
+        "structure.heading-depth",
+        "reference.unresolved",
+        "source.escaped-pipe",
+        "source.ascii-diagram",
+        "notation.case-similar",
+        "terminology.introduction-density",
+        "structure.expanded-duplicate"
+      ]
+    },
+    {
+      "id": "regression-repaired",
+      "split": "regression",
+      "path": "fixtures/regression/repaired.html",
+      "expectedRuleIds": [],
+      "negativeControls": ["resolved internal link", "real table", "SVG diagram", "nearby separated definitions"]
+    },
+    {
+      "id": "heldout-route-dependent",
+      "split": "heldout",
+      "path": "fixtures/heldout/route-dependent.html",
+      "expectedRuleIds": ["reference.unresolved"],
+      "sealedForThresholdTuning": true
+    }
+  ]
+}

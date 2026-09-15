@@ -1,0 +1,8 @@
+{
+  "buildId": "fixture-render",
+  "viewport": {
+    "widthCssPx": 1280,
+    "heightCssPx": 900,
+    "deviceScaleFactor": 1
+  }
+}
