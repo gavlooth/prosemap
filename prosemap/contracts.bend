@@ -1,4 +1,4 @@
-# Evidence integrity — Bend port of assertEvidenceIntegrity (src/contracts.ts:304).
+# Evidence integrity — the core prosemap invariant.
 #
 # The core invariant of prosemap: a finding's evidence must reproduce an exact
 # slice of the source. Here it is a decidable predicate over BYTE offsets (see

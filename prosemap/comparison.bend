@@ -1,4 +1,4 @@
-# Finding comparison — Bend port of the core of src/comparison.ts.
+# Finding comparison — recordId matching plus conservative rule/anchor grouping.
 #
 # v1 matches findings by recordId (which is `<rule.id>:<evidenceFingerprint[:20]>`,
 # so it already encodes rule + evidence). Outcomes: persisting (in both), added

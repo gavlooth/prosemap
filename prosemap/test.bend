@@ -1,4 +1,4 @@
-# Runtime smoke tests for the pure core. Run: bend bend/prosemap/test.bend
+# Runtime smoke tests for the pure core. Run: bend prosemap/test.bend
 import Base
 import ./types.bend as T
 import ./contracts.bend as C

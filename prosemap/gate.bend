@@ -1,4 +1,4 @@
-# CI gate — Bend port of the core of src/gate.ts.
+# CI gate — the allowlisted policy over newly added observations.
 #
 # A gate violation is a NEWLY ADDED (candidate-only) finding that is a
 # gate-eligible, allowlisted, mechanical observation. Everything else is

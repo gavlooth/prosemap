@@ -1,4 +1,4 @@
-# UTF-8 byte-span and source-hash smoke check. Run: bend bend/prosemap/utf8_test.bend
+# UTF-8 byte-span and source-hash smoke check. Run: bend prosemap/utf8_test.bend
 import Base
 import ./types.bend as T
 import ./utf8.bend as Utf8

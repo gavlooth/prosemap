@@ -6,3 +6,7 @@ coverage/
 .env.*
 !.env.example
 complete_experiment_bundle.txt
+
+# stray run markers
+manifest.json.complete
+*.complete

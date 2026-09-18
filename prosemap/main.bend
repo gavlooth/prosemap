@@ -1,10 +1,10 @@
-# prosemap (Bend port) — CLI entry point.
+# prosemap — CLI entry point.
 #
 # Pipeline: read a Markdown file -> SHA-256 it -> parse to blocks -> mechanical
 # analysis -> render a Markdown report -> write it out and print it.
 #
 # Invocation (Bend has no argv; paths come from the environment):
-#   PROSEMAP_INPUT=doc.md PROSEMAP_OUTPUT=report.md bend bend/prosemap/main.bend
+#   PROSEMAP_INPUT=doc.md PROSEMAP_OUTPUT=report.md bend prosemap/main.bend
 # Defaults: input.md -> report.md
 import Base
 import ./types.bend as T

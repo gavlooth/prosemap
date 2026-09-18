@@ -1,4 +1,4 @@
-# SHA-256 vector check. Run: bend bend/prosemap/sha_test.bend
+# SHA-256 vector check. Run: bend prosemap/sha_test.bend
 import Base
 import ./sha256.bend as S
 

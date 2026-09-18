@@ -1,4 +1,4 @@
-# Contextual evidence re-verification. Run: bend bend/prosemap/ctx_test.bend
+# Contextual evidence re-verification. Run: bend prosemap/ctx_test.bend
 import Base
 import ./types.bend as T
 import ./contracts.bend as C

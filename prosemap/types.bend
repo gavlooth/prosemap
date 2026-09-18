@@ -1,13 +1,13 @@
-# prosemap core data model (Bend port of src/contracts.ts).
+# prosemap core data model.
 #
-# This is a faithful *core subset* of the Zod schema in src/contracts.ts,
+# This is a faithful *core subset* of the documented record schema,
 # covering the shapes the deterministic pipeline (extract -> mechanical ->
 # compare -> gate -> report) actually consumes. Advisory-only optional fields
 # on Finding (readerDependencies, routeDependencies, intrinsicDifficulty, ...)
 # and the contextual/surface/manifest records are added in later steps; they
 # are intentionally omitted here to keep v1 checkable.
 #
-# DEVIATION FROM TS (see plan): source spans are BYTE offsets into the UTF-8
+# Source spans are BYTE offsets into the UTF-8
 # source, not UTF-16 offsets. Bend strings are codepoint lists and file IO
 # yields bytes, so byte offsets are the stable, unambiguous choice. The
 # evidence-integrity invariant is preserved, just redefined over bytes.

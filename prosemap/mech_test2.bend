@@ -1,4 +1,4 @@
-# ARI + density runtime test. Run: bend bend/prosemap/mech_test2.bend
+# ARI + density runtime test. Run: bend prosemap/mech_test2.bend
 import Base
 import ./types.bend as T
 import ./contracts.bend as C

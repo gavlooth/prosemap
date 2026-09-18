@@ -1,5 +1,5 @@
-# Contextual stage — evidence re-verification core (Bend port of the security-
-# critical part of src/contextual.ts: validateRequestEvidence, contextual.ts:331).
+# Contextual stage — evidence re-verification core (the security-critical rule:
+# cited evidence must reproduce the source before a candidate is trusted).
 #
 # A contextual (LLM) provider returns candidates that CITE evidence. Before any
 # candidate is trusted, every cited evidence span is re-sliced from the source

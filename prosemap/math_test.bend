@@ -1,5 +1,5 @@
 # Markdown math and TeX command-tokenizer smoke test.
-# Run: bend bend/prosemap/math_test.bend
+# Run: bend prosemap/math_test.bend
 import Base
 import ./types.bend as T
 import ./markdown.bend as Md

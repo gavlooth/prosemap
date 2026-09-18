@@ -1,4 +1,4 @@
-# Report renderer — Bend port of the report.md rendering in src/report.ts.
+# Report renderer — findings to a Markdown report.
 # Pure String -> String: turns a finding list into a Markdown report. Kept
 # deliberately simple for v1 (header, count, one entry per finding with its
 # dimension, kind, recordId, and message).

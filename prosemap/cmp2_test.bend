@@ -1,5 +1,5 @@
 # I4: compare2 conservatism. A rule+anchor group with unequal cardinality must
-# yield only `unmatched` (never guessed added/resolved). Run: bend bend/prosemap/cmp2_test.bend
+# yield only `unmatched` (never guessed added/resolved). Run: bend prosemap/cmp2_test.bend
 import Base
 import ./types.bend as T
 import ./contracts.bend as C

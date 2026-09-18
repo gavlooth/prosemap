@@ -1,4 +1,4 @@
-# Mechanical rules runtime test. Run: bend bend/prosemap/mech_test.bend
+# Mechanical rules runtime test. Run: bend prosemap/mech_test.bend
 import Base
 import ./types.bend as T
 import ./contracts.bend as C

@@ -1,4 +1,4 @@
-# JSON round-trip + gate over parsed findings. Run: bend bend/prosemap/jr_test.bend
+# JSON round-trip + gate over parsed findings. Run: bend prosemap/jr_test.bend
 import Base
 import ./types.bend as T
 import ./json_read.bend as Jr

@@ -1,8 +1,7 @@
-# Lexical cohesion kernel — Bend port of src/cohesion.ts (compareLexicalTokens +
-# tokenizeEligibleProse). This is the parallel-friendly heart: exact set Jaccard
-# and multiset Dice over token lists. Neither score carries a quality judgment.
+# Lexical cohesion kernel — tokenization plus exact set Jaccard and multiset
+# Dice over token lists. Neither score carries a quality judgment.
 #
-# DEVIATIONS FROM TS (intentional):
+# Representation choices (intentional):
 # - Metrics are EXACT RATIONALS (num/den as Nat), not F32. Base has no F32.show
 #   and floats can diverge across CPU/GPU; rationals are deterministic and
 #   serializable. Downstream can divide if it wants a decimal.

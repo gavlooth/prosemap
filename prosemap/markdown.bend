@@ -1,4 +1,4 @@
-# Markdown block extractor — the source adapter for the Bend port.
+# Markdown block extractor — the source adapter.
 #
 # Design note (replaces the HTML parser): prosemap-bend ingests Markdown, not
 # HTML. Markdown is line-oriented, which fits Bend's structural recursion (walk

@@ -1,4 +1,4 @@
-# Markdown parse -> mechanical analysis. Run: bend bend/prosemap/md_test.bend
+# Markdown parse -> mechanical analysis. Run: bend prosemap/md_test.bend
 import Base
 import ./types.bend as T
 import ./markdown.bend as Md

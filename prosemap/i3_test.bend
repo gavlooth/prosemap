@@ -1,5 +1,5 @@
 # I3 regression: strong/b term blocks are counted by introduction-density
-# (the TS had this dead — <strong> never became a block). Run: bend bend/prosemap/i3_test.bend
+# (the strong/b path was previously dead — <strong> never became a block). Run: bend prosemap/i3_test.bend
 import Base
 import ./types.bend as T
 import ./contracts.bend as C

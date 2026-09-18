@@ -1,4 +1,4 @@
-# Deterministic mechanical rules — Bend port of src/mechanical.ts.
+# Deterministic mechanical rules.
 #
 # v1 ports a representative subset across three dimensions, each operating
 # directly on the extracted Block list (no evidence-index / authoredId map yet):
@@ -8,9 +8,9 @@
 # The remaining rules (transitions, duplicate ids, unresolved links, ARI,
 # case-similar notation, ascii-diagram, ...) follow the same shape.
 #
-# makeFinding mirrors src/mechanical.ts: a canonical string over rule + evidence
+# Finding identity: a canonical string over rule + evidence
 # (kind, rawExcerpt, span) is hashed with our verified SHA-256; recordId is
-# `<rule.id>:<fingerprint[:20]>`. Byte-parity with the TS stableHash JSON is a
+# `<rule.id>:<fingerprint[:20]>`. Byte-parity with any external stableHash JSON is a
 # separate goal (the gate re-runs THIS function, so it is self-consistent).
 import Base
 import ./types.bend as T

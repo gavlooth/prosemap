@@ -1,4 +1,4 @@
-# comparison + gate runtime test. Run: bend bend/prosemap/gate_test.bend
+# comparison + gate runtime test. Run: bend prosemap/gate_test.bend
 import Base
 import ./types.bend as T
 import ./contracts.bend as C

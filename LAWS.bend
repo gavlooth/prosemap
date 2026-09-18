@@ -1,10 +1,9 @@
 # prosemap laws — the human-authored, ambiguity-free specs the implementation
 # must satisfy. Proven in PROOF.bend; `bend PROOF.bend` is the gate.
 #
-# This is the headline of the Bend port: prosemap's evidence-integrity contract
-# (src/contracts.ts:304) stops being a runtime assert + prose and becomes a
-# machine-checked law. More laws (gate soundness, comparison conservatism,
-# determinism, surface exclusion) are added as their modules land.
+# The headline property: prosemap's evidence-integrity contract is not a runtime
+# assert plus prose but a machine-checked law. Further laws (gate soundness,
+# determinism) can be added as their modules land.
 import Base
 import ./prosemap/types.bend as T
 import ./prosemap/contracts.bend as C

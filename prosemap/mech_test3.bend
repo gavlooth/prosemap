@@ -1,5 +1,5 @@
 # route-edge / expanded-duplicate / case-similar test.
-# Run: bend bend/prosemap/mech_test3.bend
+# Run: bend prosemap/mech_test3.bend
 import Base
 import ./types.bend as T
 import ./contracts.bend as C

@@ -1,5 +1,5 @@
 # SHA-256 in pure Bend — used for evidence fingerprints and record ids
-# (replaces src/stable.ts sha256Hex). Deterministic bit arithmetic over U32,
+# Deterministic bit arithmetic over U32,
 # a good fit for Bend and independent of any host crypto.
 #
 # Input Strings are encoded as UTF-8 octets before padding. This keeps source
