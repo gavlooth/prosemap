@@ -53,10 +53,20 @@ PROSEMAP_CMD=evaluate PROSEMAP_BASE_RUN=.runs/base PROSEMAP_CANDIDATE_RUN=.runs/
 
 | Command | Environment | Output |
 |---|---|---|
-| `analyze` (default) | `PROSEMAP_INPUT`, `PROSEMAP_OUTPUT`, `PROSEMAP_JSONL`, `PROSEMAP_MANIFEST`, `PROSEMAP_COMPLETE` | report on stdout + three artifacts + completion marker |
+| `analyze` (default) | `PROSEMAP_INPUT`, `PROSEMAP_OUTPUT`, `PROSEMAP_JSONL`, `PROSEMAP_MANIFEST`, `PROSEMAP_COMPLETE`, optional `PROSEMAP_REVIEWS` | report on stdout + three artifacts + completion marker |
 | `gate` | `PROSEMAP_BASE`, `PROSEMAP_CANDIDATE`, optional `PROSEMAP_BASE_SOURCE`, `PROSEMAP_CANDIDATE_SOURCE` | `GATE PASS/FAIL (n violation(s))` |
 | `evaluate` | `PROSEMAP_BASE`/`PROSEMAP_CANDIDATE` + both source variables, or `PROSEMAP_BASE_RUN`/`PROSEMAP_CANDIDATE_RUN` directories holding `input.md` + `findings.jsonl` | `EVALUATE PASS/FAIL (n comparison record(s))` |
-| `context` | `PROSEMAP_INPUT`, `PROSEMAP_PROVIDER_PORT` (default 8899) | contextual response body |
+| `context` | `PROSEMAP_INPUT`, `PROSEMAP_LLM_CMD` (unset ⇒ skipped), `PROSEMAP_LLM_TIMEOUT` (ms, def 60000), `PROSEMAP_LLM_MAX_BYTES` (def 1 MiB) | evidence-verified candidate lines |
+| `latex` | `PROSEMAP_INPUT`, `PROSEMAP_KATEX_CMD` (unset ⇒ skipped) | `formula.unparsable` findings for unparsable math |
+
+**FFI shim.** A single generic subprocess effect (`prosemap/effs/exec.js`, `Exec.run`) lets Bend
+shell out to external tools; it powers `latex` (a real KaTeX/TeX parser), `context` (any LLM CLI —
+prompt on stdin, JSON candidates on stdout, every cited evidence id re-verified against the source),
+and is the pattern for pandoc-based ingestion. A failed tool probe abstains rather than flagging.
+
+**Reviews.** `PROSEMAP_REVIEWS=reviews.jsonl` applies human dispositions during `analyze`; a line
+`{"findingRecordId":..,"disposition":"rejected|accepted|needs-context","rationale":..}` with
+`rejected` suppresses that finding from every artifact (and hence from the gate).
 
 Because PASS/FAIL is a stdout contract, CI wraps it, for example:
 

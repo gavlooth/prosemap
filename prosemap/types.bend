@@ -199,3 +199,17 @@ type CompRecord is Data:
     candidateRecordId: Maybe<&2, String>,
     reason: Maybe<&2, String>,
   }
+
+# reviewSchema (core subset): a human disposition on a finding
+type Disposition is Data:
+  Accepted{}
+  Rejected{}
+  NeedsContext{}
+
+type Review is Data:
+  Review{
+    findingRecordId: String,
+    reviewer: String,
+    disposition: Disposition,
+    rationale: String,
+  }

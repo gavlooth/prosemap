@@ -10,6 +10,9 @@
 import Base
 import ./types.bend as T
 import ./contracts.bend as C
+import ./markdown.bend as Md
+import ./sha256.bend as S
+import ./json_read.bend as Jr
 
 # keep an evidence item only if it re-verifies against the source
 def Ctx.keep(ok: Bool, ev: T.Evidence, rest: List<&2, T.Evidence>) -> List<&2, T.Evidence>:
@@ -84,3 +87,107 @@ def Ctx.find_body(fuel: Nat, +resp: String) -> Maybe<&2, String>:
 
 def Ctx.http_body(+resp: String) -> String:
   Ctx.body_after(Ctx.find_body(String.length(resp), resp))
+
+# ===========================================================================
+# LLM-CLI transport (chosen over TCP loopback): build a prompt from the doc's
+# SOURCE-VERIFIED evidence, hand it to an external CLI (via Exec.run, in main),
+# then keep only candidate lines that cite a verified evidence id. Loose
+# contract: model replies with one JSON object per line
+# {"kind":..,"evidenceId":..,"rationale":..}; anything else is dropped.
+# Correctness rests on the evidence check, not on schema conformance.
+# ===========================================================================
+
+# the prepared request: the prompt to send + the set of citable, verified ids
+type CtxReq is Data:
+  CtxReq{prompt: String, ids: List<&2, String>}
+
+def CtxReq.prompt(r: CtxReq) -> String:
+  match r:
+    case CtxReq{prompt, ids}:
+      prompt
+
+def CtxReq.ids(r: CtxReq) -> List<&2, String>:
+  match r:
+    case CtxReq{prompt, ids}:
+      ids
+
+def Ctx.ev_id(e: T.Evidence) -> String:
+  match e:
+    case T.Evidence{id, documentSha256, sourcePath, span, rawExcerpt, displayText, anchor, kind}:
+      id
+
+def Ctx.blk_ev(b: T.Block) -> List<&2, T.Evidence>:
+  match b:
+    case T.Block{blockId, kind, tagName, sectionAnchor, authoredId, headingLevel, ancestorSections, text, mapped, evidence, links, tex}:
+      evidence
+
+def Ctx.all_ev(blocks: List<&2, T.Block>) -> List<&2, T.Evidence>:
+  match blocks:
+    case Nil{}:
+      Nil{}
+    case Con{b, t}:
+      List.append(&2, T.Evidence, Ctx.blk_ev(b), Ctx.all_ev(t))
+
+def Ctx.ev_ids(evs: List<&2, T.Evidence>) -> List<&2, String>:
+  match evs:
+    case Nil{}:
+      Nil{}
+    case Con{e, t}:
+      Ctx.ev_id(e) <> Ctx.ev_ids(t)
+
+def Ctx.cite_line(+e: T.Evidence) -> String:
+  "  " ++ Ctx.ev_id(e) ++ ": " ++ C.Evidence.raw(e) ++ "\n"
+
+def Ctx.cite_lines(evs: List<&2, T.Evidence>) -> String:
+  match evs:
+    case Nil{}:
+      ""
+    case Con{e, t}:
+      Ctx.cite_line(e) ++ Ctx.cite_lines(t)
+
+def Ctx.prompt(evs: List<&2, T.Evidence>, +content: String) -> String:
+  "Reply ONLY with one JSON object per line: {\"kind\":\"...\",\"evidenceId\":\"...\",\"rationale\":\"...\"}.\nCite only these evidence ids:\n" ++
+  Ctx.cite_lines(evs) ++ "\n--- document ---\n" ++ content
+
+# prepare the request from the raw Markdown content: parse, gather evidence,
+# re-verify it against the source, and expose the verified citable ids.
+def Ctx.prepare(+content: String) -> CtxReq:
+  +sha = S.Sha256.hex(content)
+  +verified = Ctx.verify(content, sha, Ctx.all_ev(Md.Md.parse(content, sha)))
+  CtxReq{Ctx.prompt(verified, content), Ctx.ev_ids(verified)}
+
+# --- response filtering: keep candidate lines citing a verified id ----------
+def Ctx.keep_line(inSet: Bool, line: String, rest: List<&2, String>) -> List<&2, String>:
+  match inSet:
+    case True{}:
+      line <> rest
+    case False{}:
+      rest
+
+def Ctx.filter(+valid: List<&2, String>, lines: List<&2, String>) -> List<&2, String>:
+  match lines:
+    case Nil{}:
+      Nil{}
+    case Con{+l, t}:
+      Ctx.keep_line(
+        Bool.and(Bool.not(String.is_empty(l)), List.contains(~String, ~String.eq, valid, Jr.Jr.field(l, "evidenceId"))),
+        l, Ctx.filter(valid, t))
+
+def Ctx.join_lines(lines: List<&2, String>) -> String:
+  match lines:
+    case Nil{}:
+      ""
+    case Con{l, t}:
+      l ++ "\n" ++ Ctx.join_lines(t)
+
+def Ctx.accept_show(empty: Bool, kept: List<&2, String>) -> String:
+  match empty:
+    case True{}:
+      "(no accepted candidates)"
+    case False{}:
+      Ctx.join_lines(kept)
+
+# accepted candidates from a raw provider response, given the verified ids
+def Ctx.accept(+valid: List<&2, String>, +response: String) -> String:
+  +kept = Ctx.filter(valid, String.lines(response))
+  Ctx.accept_show(Nat.is_eq(List.length(&2, String, kept), 0n), kept)

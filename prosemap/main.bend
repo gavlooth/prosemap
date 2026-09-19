@@ -16,6 +16,9 @@ import ./json.bend as J
 import ./json_read.bend as Jr
 import ./gate.bend as G
 import ./contextual.bend as Ctx
+import ./exec.bend as E
+import ./latex.bend as Lx
+import ./reviews.bend as Rv
 import ./evaluation.bend as Eval
 import ./artifacts.bend as Art
 
@@ -39,6 +42,13 @@ def CliOut.manifest(o: CliOut) -> String:
       manifest
 
 # env value or a default
+def Cli.env_m(r: Result<&1, &1, U32 & String, String>) -> Maybe<&2, String>:
+  match r:
+    case Done{v}:
+      Some{v}
+    case Fail{e}:
+      None{}
+
 def Cli.env_or(r: Result<&1, &1, U32 & String, String>, d: String) -> String:
   match r:
     case Done{v}:
@@ -47,10 +57,18 @@ def Cli.env_or(r: Result<&1, &1, U32 & String, String>, d: String) -> String:
       d
 
 # the whole pure pipeline: markdown source -> report + findings.jsonl + manifest
+def Cli.out_of(+sha: String, +fs: List<&2, T.Finding>) -> CliOut:
+  CliOut{Rep.Rep.render(fs), J.Json.findings_jsonl(fs), J.Json.manifest(sha, List.length(&2, T.Finding, fs))}
+
 def Cli.run(+content: String) -> CliOut:
   +sha = S.Sha256.hex(content)
-  +fs  = M.Mech.analyze(4, Md.Md.parse(content, sha))
-  CliOut{Rep.Rep.render(fs), J.Json.findings_jsonl(fs), J.Json.manifest(sha, List.length(&2, T.Finding, fs))}
+  Cli.out_of(sha, M.Mech.analyze(4, Md.Md.parse(content, sha)))
+
+# analyze with a reviews.jsonl applied: findings with a Rejected disposition are
+# suppressed from every artifact.
+def Cli.run_reviewed(+content: String, +reviews: String) -> CliOut:
+  +sha = S.Sha256.hex(content)
+  Cli.out_of(sha, Rv.Rv.apply(Rv.Rv.rejected_ids(Rv.Rv.parse(reviews)), M.Mech.analyze(4, Md.Md.parse(content, sha))))
 
 # tuple projection must live in a plain def body (destructuring-let is not a
 # valid do-block statement).
@@ -66,12 +84,34 @@ def Cli.read_all(f: File) -> IO(String):
     Cli.read_finish(rd)
 
 
+# read an optional file, yielding "" when unset or unopenable (never dies)
+def Cli.read_opt_after(fr: Result<&1, &1, U32 & String, File>) -> IO(String):
+  match fr:
+    case Fail{e}:
+      IO.pure(String, "")
+    case Done{f}:
+      Cli.read_all(f)
+
+def Cli.read_opt_open(+path: String) -> IO(String):
+  do IO<String>:
+    fr : Result<&1, &1, U32 & String, File> <- File.open(path, "r")
+    Cli.read_opt_after(fr)
+
+def Cli.read_opt(m: Maybe<&2, String>) -> IO(String):
+  match m:
+    case None{}:
+      IO.pure(String, "")
+    case Some{path}:
+      Cli.read_opt_open(path)
+
 def Cli.analyze_flow() -> IO(Unit):
   do IO<Unit>:
     inr : Result<&1, &1, U32 & String, String> <- IO.get_env("PROSEMAP_INPUT")
     f : File <- IO.try(File, File.open(Cli.env_or(inr, "input.md"), "r"))
     content : String <- Cli.read_all(f)
-    +out : CliOut = Cli.run(content)
+    rvr : Result<&1, &1, U32 & String, String> <- IO.get_env("PROSEMAP_REVIEWS")
+    reviews : String <- Cli.read_opt(Cli.env_m(rvr))
+    +out : CliOut = Cli.run_reviewed(content, reviews)
     +report : String = CliOut.report(out)
     +jsonl : String = CliOut.jsonl(out)
     +manifest : String = CliOut.manifest(out)
@@ -169,35 +209,117 @@ def Cli.u32_or(r: Result<&1, &1, U32 & String, String>, d: U32) -> U32:
     case Fail{e}:
       d
 
-def Cli.context_flow() -> IO(Unit):
+# context command: run the configured LLM CLI (PROSEMAP_LLM_CMD) over the
+# document, keep only candidates citing a source-verified evidence id.
+# Unset command -> stage is skipped. Any CLI failure/timeout -> abstain.
+
+def Cli.context_emit(rr: Result<&1, &1, U32 & String, String>, ids: List<&2, String>) -> IO(Unit):
+  match rr:
+    case Fail{e}:
+      IO.print("contextual: provider CLI failed or timed out; stage abstains")
+    case Done{resp}:
+      IO.print("contextual candidates (evidence-verified):\n" ++ Ctx.Ctx.accept(ids, resp))
+
+def Cli.context_run(+cmd: String) -> IO(Unit):
   do IO<Unit>:
     inr : Result<&1, &1, U32 & String, String> <- IO.get_env("PROSEMAP_INPUT")
     f : File <- IO.try(File, File.open(Cli.env_or(inr, "input.md"), "r"))
     content : String <- Cli.read_all(f)
-    pr : Result<&1, &1, U32 & String, String> <- IO.get_env("PROSEMAP_PROVIDER_PORT")
-    resp : String <- Ctx.Ctx.fetch("127.0.0.1", Cli.u32_or(pr, 8899), Ctx.Ctx.request("/contextual", content))
-    IO.print(Ctx.Ctx.http_body(resp))
+    +req : Ctx.CtxReq = Ctx.Ctx.prepare(content)
+    tr : Result<&1, &1, U32 & String, String> <- IO.get_env("PROSEMAP_LLM_TIMEOUT")
+    br : Result<&1, &1, U32 & String, String> <- IO.get_env("PROSEMAP_LLM_MAX_BYTES")
+    rr : Result<&1, &1, U32 & String, String> <- E.Exec.run(cmd, Ctx.CtxReq.prompt(req), Cli.u32_or(tr, 60000), Cli.u32_or(br, 1048576))
+    Cli.context_emit(rr, Ctx.CtxReq.ids(req))
 
-def Cli.dispatch3(isContext: Bool, isEvaluate: Bool) -> IO(Unit):
+def Cli.context_go(m: Maybe<&2, String>) -> IO(Unit):
+  match m:
+    case None{}:
+      IO.print("contextual: PROSEMAP_LLM_CMD unset; stage skipped")
+    case Some{cmd}:
+      Cli.context_run(cmd)
+
+def Cli.context_flow() -> IO(Unit):
+  do IO<Unit>:
+    lr : Result<&1, &1, U32 & String, String> <- IO.get_env("PROSEMAP_LLM_CMD")
+    Cli.context_go(Cli.env_m(lr))
+
+# latex command: run each extracted math snippet through PROSEMAP_KATEX_CMD and
+# report the unparsable ones. Unset -> skipped. A failed probe (parser broken /
+# missing) -> abstain, so we never flag every snippet on a setup error.
+def Cli.latex_loop(items: List<&2, Lx.LxItem>, +cmd: String, acc: List<&2, T.Finding>) -> IO(List<&2, T.Finding>):
+  match items:
+    case Nil{}:
+      IO.pure(List<&2, T.Finding>, List.reverse(&2, T.Finding, acc))
+    case Con{+it, rest}:
+      do IO<List<&2, T.Finding>>:
+        rr : Result<&1, &1, U32 & String, String> <- E.Exec.run(cmd, Lx.LxItem.raw(it), 30000, 65536)
+        step : List<&2, T.Finding> = Lx.Lx.acc_step(rr, it, acc)
+        Cli.latex_loop(rest, cmd, step)
+
+def Cli.latex_emit(+fs: List<&2, T.Finding>) -> IO(Unit):
+  IO.print("unparsable LaTeX (" ++ Nat.show(List.length(&2, T.Finding, fs)) ++ "):\n" ++ J.Json.findings_jsonl(fs))
+
+def Cli.latex_run(+cmd: String) -> IO(Unit):
+  do IO<Unit>:
+    inr : Result<&1, &1, U32 & String, String> <- IO.get_env("PROSEMAP_INPUT")
+    f : File <- IO.try(File, File.open(Cli.env_or(inr, "input.md"), "r"))
+    content : String <- Cli.read_all(f)
+    +cc : String = content
+    +sha : String = S.Sha256.hex(cc)
+    found : List<&2, T.Finding> <- Cli.latex_loop(Lx.Lx.items(Md.Md.parse(cc, sha)), cmd, Nil{})
+    Cli.latex_emit(found)
+
+def Cli.latex_after_probe(pr: Result<&1, &1, U32 & String, String>, cmd: String) -> IO(Unit):
+  match pr:
+    case Fail{e}:
+      IO.print("latex: KaTeX probe failed; stage abstains")
+    case Done{ok}:
+      Cli.latex_run(cmd)
+
+def Cli.latex_probe(+cmd: String) -> IO(Unit):
+  do IO<Unit>:
+    pr : Result<&1, &1, U32 & String, String> <- E.Exec.run(cmd, "x+1", 30000, 65536)
+    Cli.latex_after_probe(pr, cmd)
+
+def Cli.latex_go(m: Maybe<&2, String>) -> IO(Unit):
+  match m:
+    case None{}:
+      IO.print("latex: PROSEMAP_KATEX_CMD unset; stage skipped")
+    case Some{cmd}:
+      Cli.latex_probe(cmd)
+
+def Cli.latex_flow() -> IO(Unit):
+  do IO<Unit>:
+    kr : Result<&1, &1, U32 & String, String> <- IO.get_env("PROSEMAP_KATEX_CMD")
+    Cli.latex_go(Cli.env_m(kr))
+
+def Cli.dispatch4(isEvaluate: Bool, isLatex: Bool) -> IO(Unit):
+  match isEvaluate:
+    case True{}:
+      Eval.Eval.flow()
+    case False{}:
+      match isLatex:
+        case True{}:
+          Cli.latex_flow()
+        case False{}:
+          Cli.analyze_flow()
+
+def Cli.dispatch3(isContext: Bool, isEvaluate: Bool, isLatex: Bool) -> IO(Unit):
   match isContext:
     case True{}:
       Cli.context_flow()
     case False{}:
-      match isEvaluate:
-        case True{}:
-          Eval.Eval.flow()
-        case False{}:
-          Cli.analyze_flow()
+      Cli.dispatch4(isEvaluate, isLatex)
 
-def Cli.dispatch2(isGate: Bool, isContext: Bool, isEvaluate: Bool) -> IO(Unit):
+def Cli.dispatch2(isGate: Bool, isContext: Bool, isEvaluate: Bool, isLatex: Bool) -> IO(Unit):
   match isGate:
     case True{}:
       Cli.gate_flow()
     case False{}:
-      Cli.dispatch3(isContext, isEvaluate)
+      Cli.dispatch3(isContext, isEvaluate, isLatex)
 
 def Cli.dispatch(+cmd: String) -> IO(Unit):
-  Cli.dispatch2(String.eq(cmd, "gate"), String.eq(cmd, "context"), String.eq(cmd, "evaluate"))
+  Cli.dispatch2(String.eq(cmd, "gate"), String.eq(cmd, "context"), String.eq(cmd, "evaluate"), String.eq(cmd, "latex"))
 def main() -> IO(Unit):
   do IO<Unit>:
     cmdr : Result<&1, &1, U32 & String, String> <- IO.get_env("PROSEMAP_CMD")
