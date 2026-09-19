@@ -344,14 +344,17 @@ def Md.add_tex(b: T.Block, tex: List<&2, T.Tex>) -> T.Block:
 
 def Md.eid(start: U32) -> String:
   "ev-" ++ Nat.show(U32.to_nat(start))
-def Md.block(+tag: String, kind: T.BlockKind, evk: T.EvidenceKind, level: Maybe<&2, U32>, +start: U32, end: U32, +text: String, +sec: String, +authored: Maybe<&2, String>, docsha: String, +src: String) -> T.Block:
+# `raw` is the block's exact source substring (already held by the parser);
+# `text` is the display/analysis text. Evidence is built O(1) via Evidence.of —
+# NO re-slicing of the whole source (which was O(n^2) and overflowed).
+def Md.block(+tag: String, kind: T.BlockKind, evk: T.EvidenceKind, level: Maybe<&2, U32>, +start: U32, end: U32, +raw: String, +text: String, +sec: String, +authored: Maybe<&2, String>, docsha: String) -> T.Block:
   +sid = Nat.show(U32.to_nat(start))
   +eid = Md.eid(start)
   +links = Md.links(text, eid)
-  ev = C.Evidence.mk(eid, docsha, "input.md", start, end, text, {T.Anchor{sec, None{}} : T.Anchor}, evk, src)
+  ev = C.Evidence.of(eid, docsha, "input.md", start, end, raw, text, {T.Anchor{sec, None{}} : T.Anchor}, evk)
   T.Block{"blk-" ++ sid, kind, tag, sec, authored, level, [], text, True{}, [ev], links, []}
-def Md.inline_block(+tag: String, kind: T.BlockKind, evk: T.EvidenceKind, level: Maybe<&2, U32>, +start: U32, end: U32, +text: String, +sec: String, +authored: Maybe<&2, String>, docsha: String, +src: String) -> T.Block:
-  Md.add_tex(Md.block(tag, kind, evk, level, start, end, text, sec, authored, docsha, src), Md.tex(text, Md.eid(start)))
+def Md.inline_block(+tag: String, kind: T.BlockKind, evk: T.EvidenceKind, level: Maybe<&2, U32>, +start: U32, end: U32, +raw: String, +text: String, +sec: String, +authored: Maybe<&2, String>, docsha: String) -> T.Block:
+  Md.add_tex(Md.block(tag, kind, evk, level, start, end, raw, text, sec, authored, docsha), Md.tex(text, Md.eid(start)))
 
 # ---------------------------------------------------------------------------
 # Inline terminology extraction
@@ -433,23 +436,23 @@ def Md.term_apply(fuel: Nat, step: TermStep, +open: String, +close: String) -> L
             Bool.not(String.is_empty(Md.trim(text))), text, start, end,
             Md.term_apply(p, Md.term_step(rest, st, offset, open, close), open, close))
 
-def Md.term_blocks(hits: List<&2, TermHit>, +tag: String, +kind: T.BlockKind, +evk: T.EvidenceKind, +sec: String, +docsha: String, +src: String) -> List<&2, T.Block>:
+def Md.term_blocks(hits: List<&2, TermHit>, +tag: String, +kind: T.BlockKind, +evk: T.EvidenceKind, +sec: String, +docsha: String) -> List<&2, T.Block>:
   match hits:
     case Nil{}:
       Nil{}
-    case Con{TermHit{text, start, end}, t}:
-      Md.block(tag, kind, evk, None{}, start, end, text, sec, None{}, docsha, src) <>
-        Md.term_blocks(t, tag, kind, evk, sec, docsha, src)
+    case Con{TermHit{+text, start, end}, t}:
+      Md.block(tag, kind, evk, None{}, start, end, text, text, sec, None{}, docsha) <>
+        Md.term_blocks(t, tag, kind, evk, sec, docsha)
 
-def Md.terms_of(+text: String, +start: U32, +sec: String, +docsha: String, +src: String) -> List<&2, T.Block>:
+def Md.terms_of(+text: String, +start: U32, +sec: String, +docsha: String) -> List<&2, T.Block>:
   List.append(
     &2, T.Block,
     Md.term_blocks(
       Md.term_apply(1n+String.length(text), Md.term_step(text, TermScan{}, start, "<dfn>", "</dfn>"), "<dfn>", "</dfn>"),
-      "dfn", T.BkDefinition{}, T.EvDefinition{}, sec, docsha, src),
+      "dfn", T.BkDefinition{}, T.EvDefinition{}, sec, docsha),
     Md.term_blocks(
       Md.term_apply(1n+String.length(text), Md.term_step(text, TermScan{}, start, "**", "**"), "**", "**"),
-      "strong", T.BkOther{}, T.EvProse{}, sec, docsha, src))
+      "strong", T.BkOther{}, T.EvProse{}, sec, docsha))
 
 
 def Md.htag(h: Nat) -> String:
@@ -529,94 +532,135 @@ def Md.hn_pick(m: Maybe<&2, String>, offset: U32) -> String:
 def Md.heading_nsec(+line: String, +offset: U32) -> String:
   Md.hn_pick(Md.line_slug(line), offset)
 
-def Md.heading_block(+line: String, +offset: U32, len: U32, +sec: String, docsha: String, +src: String) -> List<&2, T.Block>:
+# raw excerpt = the full heading line (its exact source slice); display text =
+# the slug-stripped, trimmed title.
+def Md.heading_block(+line: String, +offset: U32, len: U32, +sec: String, docsha: String) -> List<&2, T.Block>:
   +h = Md.hcount(line)
-  [ Md.inline_block(Md.htag(h), T.BkHeading{}, T.EvHeading{}, Some{U32.from_nat(h)}, offset, U32.add(offset, len), Md.strip_slug(Md.trim(String.drop(line, h))), sec, Md.line_slug(line), docsha, src) ]
+  [ Md.inline_block(Md.htag(h), T.BkHeading{}, T.EvHeading{}, Some{U32.from_nat(h)}, offset, U32.add(offset, len), line, Md.strip_slug(Md.trim(String.drop(line, h))), sec, Md.line_slug(line), docsha) ]
 
-def Md.para_block(+buf: String, +start: U32, pend: U32, +sec: String, +docsha: String, +src: String) -> List<&2, T.Block>:
-  Md.inline_block("p", T.BkProse{}, T.EvProse{}, None{}, start, pend, buf, sec, None{}, docsha, src) <>
-    Md.terms_of(buf, start, sec, docsha, src)
+def Md.para_block(+buf: String, +start: U32, pend: U32, +sec: String, +docsha: String) -> List<&2, T.Block>:
+  Md.inline_block("p", T.BkProse{}, T.EvProse{}, None{}, start, pend, buf, buf, sec, None{}, docsha) <>
+    Md.terms_of(buf, start, sec, docsha)
 
-def Md.code_block(buf: String, +start: U32, cend: U32, +sec: String, docsha: String, +src: String) -> List<&2, T.Block>:
-  [ Md.block("pre", T.BkPre{}, T.EvSourcePattern{}, None{}, start, cend, buf, sec, None{}, docsha, src) ]
+def Md.code_block(+buf: String, +start: U32, cend: U32, +sec: String, docsha: String) -> List<&2, T.Block>:
+  [ Md.block("pre", T.BkPre{}, T.EvSourcePattern{}, None{}, start, cend, buf, buf, sec, None{}, docsha) ]
 
-def Md.math_block(+buf: String, +start: U32, mend: U32, +sec: String, docsha: String, +src: String) -> List<&2, T.Block>:
-  [ Md.add_tex(Md.block("math", T.BkMath{}, T.EvTex{}, None{}, start, mend, buf, sec, None{}, docsha, src), Md.tex_push(buf, True{}, Md.eid(start), Nil{})) ]
+def Md.math_block(+buf: String, +start: U32, mend: U32, +sec: String, docsha: String) -> List<&2, T.Block>:
+  [ Md.add_tex(Md.block("math", T.BkMath{}, T.EvTex{}, None{}, start, mend, buf, buf, sec, None{}, docsha), Md.tex_push(buf, True{}, Md.eid(start), Nil{})) ]
 
 # ---------------------------------------------------------------------------
 # per-line dispatch (non-recursive; returns a Step)
 # ---------------------------------------------------------------------------
 # state None, no pending block. `cur` is the section in effect.
-def Md.normal(lc: LC, +line: String, +offset: U32, len: U32, +noff: U32, +cur: String, docsha: String, +src: String) -> Step:
+def Md.normal(lc: LC, +line: String, +offset: U32, len: U32, +noff: U32, +cur: String, docsha: String) -> Step:
   match lc:
     case LcFence{}:
       Step{Nil{}, MdCode{"", noff, noff, cur, Md.is_math_fence(line)}, cur}
     case LcHeading{}:
       +nsec = Md.heading_nsec(line, offset)
-      Step{Md.heading_block(line, offset, len, nsec, docsha, src), MdNone{}, nsec}
+      Step{Md.heading_block(line, offset, len, nsec, docsha), MdNone{}, nsec}
     case LcBlank{}:
       Step{Nil{}, MdNone{}, cur}
     case LcText{}:
       Step{Nil{}, MdPara{line, offset, U32.add(offset, len), cur}, cur}
 
 # state Para{buf,start,pend,psec}
-def Md.para(lc: LC, +line: String, +buf: String, +start: U32, pend: U32, +psec: String, +offset: U32, len: U32, +noff: U32, +cur: String, +docsha: String, +src: String) -> Step:
+def Md.para(lc: LC, +line: String, +buf: String, +start: U32, pend: U32, +psec: String, +offset: U32, len: U32, +noff: U32, +cur: String, +docsha: String) -> Step:
   match lc:
     case LcFence{}:
-      Step{Md.para_block(buf, start, pend, psec, docsha, src), MdCode{"", noff, noff, cur, Md.is_math_fence(line)}, cur}
+      Step{Md.para_block(buf, start, pend, psec, docsha), MdCode{"", noff, noff, cur, Md.is_math_fence(line)}, cur}
     case LcHeading{}:
       +nsec = Md.heading_nsec(line, offset)
-      Step{List.append(&2, T.Block, Md.para_block(buf, start, pend, psec, docsha, src), Md.heading_block(line, offset, len, nsec, docsha, src)), MdNone{}, nsec}
+      Step{List.append(&2, T.Block, Md.para_block(buf, start, pend, psec, docsha), Md.heading_block(line, offset, len, nsec, docsha)), MdNone{}, nsec}
     case LcBlank{}:
-      Step{Md.para_block(buf, start, pend, psec, docsha, src), MdNone{}, cur}
+      Step{Md.para_block(buf, start, pend, psec, docsha), MdNone{}, cur}
     case LcText{}:
       Step{Nil{}, MdPara{Md.appendln(buf, line), start, U32.add(offset, len), psec}, cur}
 
 # state Code{buf,start,cend,csec}
-def Md.code_emit(math: Bool, +buf: String, +start: U32, end: U32, +sec: String, docsha: String, +src: String) -> List<&2, T.Block>:
+def Md.code_emit(math: Bool, +buf: String, +start: U32, end: U32, +sec: String, docsha: String) -> List<&2, T.Block>:
   match math:
     case False{}:
-      Md.code_block(buf, start, end, sec, docsha, src)
+      Md.code_block(buf, start, end, sec, docsha)
     case True{}:
-      Md.math_block(buf, start, end, sec, docsha, src)
+      Md.math_block(buf, start, end, sec, docsha)
 
-def Md.code_line(isFence: Bool, +line: String, +buf: String, +start: U32, cend: U32, +csec: String, math: Bool, offset: U32, len: U32, +cur: String, docsha: String, +src: String) -> Step:
+def Md.code_line(isFence: Bool, +line: String, +buf: String, +start: U32, cend: U32, +csec: String, math: Bool, offset: U32, len: U32, +cur: String, docsha: String) -> Step:
   match isFence:
     case True{}:
-      Step{Md.code_emit(math, buf, start, cend, csec, docsha, src), MdNone{}, cur}
+      Step{Md.code_emit(math, buf, start, cend, csec, docsha), MdNone{}, cur}
     case False{}:
       Step{Nil{}, MdCode{Md.appendln(buf, line), start, U32.add(offset, len), csec, math}, cur}
 
-def Md.step(state: MdSt, +line: String, offset: U32, len: U32, noff: U32, +cur: String, docsha: String, +src: String) -> Step:
+def Md.step(state: MdSt, +line: String, offset: U32, len: U32, noff: U32, +cur: String, docsha: String) -> Step:
   match state:
     case MdNone{}:
-      Md.normal(Md.classify(line), line, offset, len, noff, cur, docsha, src)
+      Md.normal(Md.classify(line), line, offset, len, noff, cur, docsha)
     case MdPara{buf, start, pend, psec}:
-      Md.para(Md.classify(line), line, buf, start, pend, psec, offset, len, noff, cur, docsha, src)
+      Md.para(Md.classify(line), line, buf, start, pend, psec, offset, len, noff, cur, docsha)
     case MdCode{buf, start, cend, csec, math}:
-      Md.code_line(String.starts_with(line, "```"), line, buf, start, cend, csec, math, offset, len, cur, docsha, src)
+      Md.code_line(String.starts_with(line, "```"), line, buf, start, cend, csec, math, offset, len, cur, docsha)
 
 # ---------------------------------------------------------------------------
 # fold over lines (self-recursive; step is computed then projected)
 # ---------------------------------------------------------------------------
-def Md.flush(state: MdSt, docsha: String, +src: String) -> List<&2, T.Block>:
+def Md.flush(state: MdSt, docsha: String) -> List<&2, T.Block>:
   match state:
     case MdNone{}:
       Nil{}
     case MdPara{buf, start, pend, psec}:
-      Md.para_block(buf, start, pend, psec, docsha, src)
+      Md.para_block(buf, start, pend, psec, docsha)
     case MdCode{buf, start, cend, csec, math}:
-      Md.code_emit(math, buf, start, cend, csec, docsha, src)
+      Md.code_emit(math, buf, start, cend, csec, docsha)
 
-def Md.go(lines: List<&2, String>, +offset: U32, state: MdSt, +cur: String, +docsha: String, +src: String) -> List<&2, T.Block>:
+# prepend the blocks of `xs` (in order) onto `acc`, leaving acc in reverse
+# document order; itself tail-recursive.
+def Md.prepend_all(xs: List<&2, T.Block>, acc: List<&2, T.Block>) -> List<&2, T.Block>:
+  match xs:
+    case Nil{}:
+      acc
+    case Con{h, t}:
+      Md.prepend_all(t, h <> acc)
+
+# TAIL-RECURSIVE line fold (accumulator in reverse). The recursive call is in
+# tail position, so Bend compiles it to a loop — constant stack over a document
+# of any length (a non-tail version overflows the machine stack on large files).
+def Md.go(lines: List<&2, String>, +offset: U32, state: MdSt, +cur: String, +docsha: String, acc: List<&2, T.Block>) -> List<&2, T.Block>:
   match lines:
     case Nil{}:
-      Md.flush(state, docsha, src)
+      List.append(&2, T.Block, List.reverse(&2, T.Block, acc), Md.flush(state, docsha))
     case Con{+line, rest}:
       +len  = Utf8.Utf8.byte_length(line)
       +noff = U32.add(U32.add(offset, len), 1)
-      +step = Md.step(state, line, offset, len, noff, cur, docsha, src)
-      List.append(&2, T.Block, Md.step_emit(step), Md.go(rest, noff, Md.step_state(step), Md.step_sec(step), docsha, src))
+      +step = Md.step(state, line, offset, len, noff, cur, docsha)
+      Md.go(rest, noff, Md.step_state(step), Md.step_sec(step), docsha, Md.prepend_all(Md.step_emit(step), acc))
+
+# TAIL-RECURSIVE line split (Base's String.lines is non-tail and overflows on
+# multi-MB input). Splits on '\n'; builds each line reversed then reverses.
+def Md.lines_cur(isNL: Bool, c: Char, curRev: String) -> String:
+  match isNL:
+    case True{}:
+      ""
+    case False{}:
+      SCon{c, curRev}
+
+def Md.lines_acc(isNL: Bool, curRev: String, acc: List<&2, String>) -> List<&2, String>:
+  match isNL:
+    case True{}:
+      String.reverse(curRev) <> acc
+    case False{}:
+      acc
+
+def Md.lines_go(s: String, +curRev: String, acc: List<&2, String>) -> List<&2, String>:
+  match s:
+    case SNil{}:
+      List.reverse(&2, String, String.reverse(curRev) <> acc)
+    case SCon{+c, t}:
+      +isNL = U32.is_eq(Char.to_u32(c), 10)
+      Md.lines_go(t, Md.lines_cur(isNL, c, curRev), Md.lines_acc(isNL, curRev, acc))
+
+def Md.lines(s: String) -> List<&2, String>:
+  Md.lines_go(s, "", Nil{})
 
 def Md.parse(+src: String, +docsha: String) -> List<&2, T.Block>:
-  Md.go(String.lines(src), 0, MdNone{}, "root", docsha, src)
+  Md.go(Md.lines(src), 0, MdNone{}, "root", docsha, Nil{})

@@ -78,3 +78,21 @@ def Evidence.mk(
     anchor,
     kind,
   }
+
+# Evidence.of: the caller supplies rawExcerpt directly (the exact source slice it
+# already holds), so no re-slicing of the whole source is needed. This is what
+# the streaming Markdown parser uses — each block already carries its own source
+# substring, so building evidence is O(1) instead of re-scanning `src` from
+# offset 0 for every block (which is O(n^2) and overflows on large documents).
+def Evidence.of(
+  id: String,
+  documentSha256: String,
+  sourcePath: String,
+  start: U32,
+  end: U32,
+  rawExcerpt: String,
+  displayText: String,
+  anchor: T.Anchor,
+  kind: T.EvidenceKind,
+) -> T.Evidence:
+  T.Evidence{id, documentSha256, sourcePath, T.Span{start, end}, rawExcerpt, displayText, anchor, kind}

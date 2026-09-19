@@ -84,12 +84,18 @@ def Cli.llm_run(+cmd: String, prompt: String) -> IO(String):
     rr : Result<&1, &1, U32 & String, String> <- E.Exec.run(cmd, prompt, 60000, 1048576)
     Cli.llm_resp(rr)
 
-def Cli.maybe_llm(m: Maybe<&2, String>, prompt: String) -> IO(String):
+# Preparing a contextual request parses and hashes the whole document. Skip that
+# work entirely when no model command was requested; the mechanical pass below
+# remains the sole full-document pass for ordinary analysis.
+def Cli.maybe_cands(m: Maybe<&2, String>, +reader: String, +content: String) -> IO(List<&2, T.Finding>):
   match m:
     case None{}:
-      IO.pure(String, "")
+      IO.pure(List<&2, T.Finding>, Nil{})
     case Some{cmd}:
-      Cli.llm_run(cmd, prompt)
+      do IO<List<&2, T.Finding>>:
+        +req : Ctx.CtxReq = Ctx.Ctx.prepare(reader, content)
+        resp : String <- Cli.llm_run(cmd, Ctx.CtxReq.prompt(req))
+        IO.pure(List<&2, T.Finding>, Ctx.Ctx.candidates(Ctx.CtxReq.evs(req), resp))
 
 # tuple projection must live in a plain def body (destructuring-let is not a
 # valid do-block statement).
@@ -99,10 +105,22 @@ def Cli.read_finish(rd: File & Result<&1, &1, U32 & String, String>) -> IO(Strin
     File.close(f2)
     IO.pass(String, res)
 
+def Cli.read_sized(sr: File & Result<&1, &1, U32 & String, U32>) -> IO(String):
+  (f, res) = sr
+  match res:
+    case Fail{(code, message)}:
+      do IO<String>:
+        File.close(f)
+        IO.die(String, code, message)
+    case Done{size}:
+      do IO<String>:
+        rd : File & Result<&1, &1, U32 & String, String> <- File.read(f, size)
+        Cli.read_finish(rd)
+
 def Cli.read_all(f: File) -> IO(String):
   do IO<String>:
-    rd : File & Result<&1, &1, U32 & String, String> <- File.read(f, 5000000)
-    Cli.read_finish(rd)
+    sr : File & Result<&1, &1, U32 & String, U32> <- File.size(f)
+    Cli.read_sized(sr)
 
 
 # read an optional file, yielding "" when unset or unopenable (never dies)
@@ -135,10 +153,8 @@ def Cli.analyze_flow() -> IO(Unit):
     reviews : String <- Cli.read_opt(Cli.env_m(rvr))
     rdr : Result<&1, &1, U32 & String, String> <- IO.get_env("PROSEMAP_READER")
     reader : String <- Cli.read_opt(Cli.env_m(rdr))
-    +req : Ctx.CtxReq = Ctx.Ctx.prepare(reader, cc)
     lcr : Result<&1, &1, U32 & String, String> <- IO.get_env("PROSEMAP_LLM_CMD")
-    resp : String <- Cli.maybe_llm(Cli.env_m(lcr), Ctx.CtxReq.prompt(req))
-    +cands : List<&2, T.Finding> = Ctx.Ctx.candidates(Ctx.CtxReq.evs(req), resp)
+    cands : List<&2, T.Finding> <- Cli.maybe_cands(Cli.env_m(lcr), reader, cc)
     rtr : Result<&1, &1, U32 & String, String> <- IO.get_env("PROSEMAP_ROUTE")
     route : String <- Cli.read_opt(Cli.env_m(rtr))
     +out : CliOut = Cli.out_merged(cc, cands, reviews, route)

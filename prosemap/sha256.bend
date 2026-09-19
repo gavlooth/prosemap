@@ -93,37 +93,64 @@ def sha.be64(bits: Nat) -> List<&2, U32>:
   List.reverse(&2, U32, sha.le_bytes(8n, bits))
 
 # pad message bytes to a multiple of 64: append 0x80, zeros, then bit length
+# tail-recursive length / append over U32 lists (Base's are non-tail and
+# overflow on multi-MB messages).
+def sha.len_go(xs: List<&2, U32>, acc: Nat) -> Nat:
+  match xs:
+    case Nil{}:
+      acc
+    case Con{h, t}:
+      sha.len_go(t, 1n+acc)
+
+def sha.len(xs: List<&2, U32>) -> Nat:
+  sha.len_go(xs, 0n)
+
+def sha.rcat(xs: List<&2, U32>, acc: List<&2, U32>) -> List<&2, U32>:
+  match xs:
+    case Nil{}:
+      acc
+    case Con{h, t}:
+      sha.rcat(t, h <> acc)
+
+def sha.append(xs: List<&2, U32>, ys: List<&2, U32>) -> List<&2, U32>:
+  sha.rcat(List.reverse(&2, U32, xs), ys)
+
 def sha.pad(+msg: List<&2, U32>) -> List<&2, U32>:
-  +len = List.length(&2, U32, msg)
+  +len = sha.len(msg)
   +t   = sha.nmod(Nat.add(len, 1n), 64n)
   +k   = sha.nmod(Nat.sub(Nat.add(64n, 56n), t), 64n)
   +bits = Nat.mul(len, 8n)
-  List.append(&2, U32, msg,
+  sha.append(msg,
     List.append(&2, U32, {[128] : List<&2, U32>},
       List.append(&2, U32, sha.zeros(k), sha.be64(bits))))
 
 # --- big-endian 4-byte grouping -------------------------------------------
-def sha.words(bs: List<&2, U32>) -> List<&2, U32>:
+# TAIL-RECURSIVE: pack 4 bytes/word, accumulate reversed, reverse at the end.
+# (A non-tail version overflows the stack on multi-MB inputs.)
+def sha.words_go(bs: List<&2, U32>, acc: List<&2, U32>) -> List<&2, U32>:
   match bs:
     case Nil{}:
-      Nil{}
+      List.reverse(&2, U32, acc)
     case Con{b0, r0}:
       match r0:
         case Nil{}:
-          Nil{}
+          List.reverse(&2, U32, acc)
         case Con{b1, r1}:
           match r1:
             case Nil{}:
-              Nil{}
+              List.reverse(&2, U32, acc)
             case Con{b2, r2}:
               match r2:
                 case Nil{}:
-                  Nil{}
+                  List.reverse(&2, U32, acc)
                 case Con{b3, r3}:
                   +w = U32.or(
                     U32.or(U32.shln(b0, 24n), U32.shln(b1, 16n)),
                     U32.or(U32.shln(b2, 8n), b3))
-                  w <> sha.words(r3)
+                  sha.words_go(r3, w <> acc)
+
+def sha.words(bs: List<&2, U32>) -> List<&2, U32>:
+  sha.words_go(bs, Nil{})
 
 # --- schedule --------------------------------------------------------------
 def sha.unwrap(m: Maybe<&2, U32>) -> U32:
@@ -213,5 +240,5 @@ def sha.hex(h: St8) -> String:
 # --- entry -----------------------------------------------------------------
 def Sha256.hex(s: String) -> String:
   +ws = sha.words(sha.pad(sha.bytes(s)))
-  +nb = Nat.div(List.length(&2, U32, ws), 16n)
+  +nb = Nat.div(sha.len(ws), 16n)
   sha.hex(sha.blocks(nb, ws, sha.h0()))

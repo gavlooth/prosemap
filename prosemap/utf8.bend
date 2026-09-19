@@ -55,22 +55,36 @@ def Utf8.char_bytes(c: Char) -> List<&2, U32>:
   +code = Char.to_u32(c)
   Utf8.encode1(U32.is_lt(code, 128), code)
 
-# String -> UTF-8 octets. A character emits at most four bytes, so appending
-# its prefix before the recursively-produced tail remains bounded per step.
-def Utf8.bytes(s: String) -> List<&2, U32>:
-  match s:
-    case SNil{}:
-      Nil{}
-    case SCon{c, t}:
-      List.append(&2, U32, Utf8.char_bytes(c), Utf8.bytes(t))
+# String -> UTF-8 octets. TAIL-RECURSIVE (accumulator, reversed): the recursive
+# call is in tail position so Bend compiles it to a loop — constant stack over
+# multi-MB inputs. A non-tail version overflows the machine stack.
+def Utf8.prepend_bytes(xs: List<&2, U32>, acc: List<&2, U32>) -> List<&2, U32>:
+  match xs:
+    case Nil{}:
+      acc
+    case Con{h, t}:
+      Utf8.prepend_bytes(t, h <> acc)
 
-# UTF-8 byte length, used for externally-visible source spans.
-def Utf8.byte_length(s: String) -> U32:
+def Utf8.bytes_go(s: String, acc: List<&2, U32>) -> List<&2, U32>:
   match s:
     case SNil{}:
-      0
+      List.reverse(&2, U32, acc)
     case SCon{c, t}:
-      U32.add(Utf8.width(c), Utf8.byte_length(t))
+      Utf8.bytes_go(t, Utf8.prepend_bytes(Utf8.char_bytes(c), acc))
+
+def Utf8.bytes(s: String) -> List<&2, U32>:
+  Utf8.bytes_go(s, Nil{})
+
+# UTF-8 byte length (tail-recursive accumulator), used for source spans.
+def Utf8.byte_length_go(s: String, acc: U32) -> U32:
+  match s:
+    case SNil{}:
+      acc
+    case SCon{c, t}:
+      Utf8.byte_length_go(t, U32.add(acc, Utf8.width(c)))
+
+def Utf8.byte_length(s: String) -> U32:
+  Utf8.byte_length_go(s, 0)
 
 # Drop an exact UTF-8-byte prefix. A byte range splitting a character cannot be
 # represented as a Bend String, so non-boundary starts deterministically yield

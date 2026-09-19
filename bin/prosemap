@@ -4,6 +4,7 @@ set -eu
 SELF=$(readlink -f "$0")
 ROOT=$(dirname "$(dirname "$SELF")")
 MAIN="$ROOT/prosemap/main.bend"
+CORE="$ROOT/.prosemap/native/prosemap-core"
 
 if command -v bend >/dev/null 2>&1; then
   BEND=$(command -v bend)
@@ -13,6 +14,14 @@ else
   printf '%s\n' 'prosemap: Bend is not installed or not on PATH' >&2
   exit 127
 fi
+
+invoke_core() {
+  if [ -x "$CORE" ]; then
+    "$CORE"
+  else
+    "$BEND" "$MAIN"
+  fi
+}
 
 # Arguments are the public interface. Ignore inherited Prosemap variables so a
 # prior shell session cannot silently alter this invocation.
@@ -53,7 +62,7 @@ need_arg() {
 run_status() {
   expected=$1
   set +e
-  output=$("$BEND" "$MAIN" 2>&1)
+  output=$(invoke_core 2>&1)
   status=$?
   set -e
   printf '%s\n' "$output"
@@ -169,7 +178,7 @@ analyze() {
   unset PROSEMAP_CMD
   export_optional
 
-  "$BEND" "$MAIN"
+  invoke_core
   status=$?
   if [ "$status" -eq 0 ]; then
     printf '\nArtifacts: %s\n' "$OUT_DIR" >&2
@@ -186,7 +195,7 @@ context() {
   export PROSEMAP_CMD=context
   export PROSEMAP_INPUT=$INPUT
   export_optional
-  "$BEND" "$MAIN"
+  invoke_core
 }
 
 latex() {
@@ -198,7 +207,7 @@ latex() {
   export PROSEMAP_CMD=latex
   export PROSEMAP_INPUT=$INPUT
   export_optional
-  "$BEND" "$MAIN"
+  invoke_core
 }
 
 if [ "$#" -eq 0 ]; then

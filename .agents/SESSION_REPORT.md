@@ -148,3 +148,19 @@ Signature: openai-codex/gpt-6-astra
 - Dependencies/restart requirements: `~/.local/bin` must be on PATH; it already is on this workstation. No restart required.
 
 Signature: openai-codex/gpt-6-astra
+
+## 2026-09-19T15:37:03+03:00 — Claude working-copy takeover checkpoint
+
+- Objective: take over the shared working copy from Claude without discarding or rewriting its in-progress changes.
+- Workspace: `/home/heefoo/Documents/code/prosemap`; working copy `57c51137` on parent `6fe9d544`.
+- Inherited changes: uncommitted edits in `prosemap/{contextual,contracts,markdown,sha256,utf8}.bend` plus new diagnostic programs `prosemap/{blk_test,ovf_test}.bend`. The patch replaces repeated source slicing with caller-provided evidence excerpts and attempts accumulator-based traversals for large inputs.
+- Implementation coverage: validation only; 100% of the visible inherited patch was inspected, but the missing Claude conversation leaves its intended acceptance target unknown.
+- Commands run: `jj status`; `jj diff --stat`; `jj diff --git`; module checks for the five modified modules; affected smoke programs (`sha_test`, `utf8_test`, `md_test`, `math_test`, `ctx_test`); large-input diagnostics over `complete_experiment_bundle.txt` for parser/analyzer, raw character traversal, SHA, and parsing; raw traversal repeated with unlimited OS stack.
+- Key results: all five modified modules type-check; all five affected smoke programs pass. The 13.2 MB inherited reproduction still fails with `bend: memory fault (machine stack overflow?)`; even the hand-written tail-recursive character counter fails, and `ulimit -s unlimited` does not change the result.
+- Negative memory: source-level tail-position rewrites are not sufficient evidence that Bend 2.0.5 executes these traversals in constant space. The failure occurs below Markdown analysis, during a minimal traversal of the loaded Bend string.
+- Current recommendation: preserve the inherited patch until its original goal is recovered. If the goal is whole-file analysis of multi-megabyte documents, move bounded input/chunk orchestration across the public launcher/FFI boundary or establish a supported Bend runtime setting; do not claim the current tail-recursive rewrite fixes the overflow.
+- Unresolved issues: original Claude acceptance criteria are unavailable; the large-input fault remains reproducible; the two diagnostic programs appear temporary and have not been removed.
+- Next actions: recover the intended Claude task from the user or external pane, then either finish a boundary-level large-input design or discard only the failed experimental changes with explicit authorization.
+- Dependencies, blockers, restart requirements: Bend 2.0.5; no restart required.
+
+Signature: openai-codex/gpt-5.6-sol

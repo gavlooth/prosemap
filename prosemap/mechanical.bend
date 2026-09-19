@@ -806,6 +806,20 @@ def Mech.spaced(s: String) -> String:
 def Mech.norm_ws(text: String) -> String:
   String.join(List.filter(~String, ~Mech.nonempty, String.split(Mech.spaced(text), ' ')), " ")
 
+# Cache each normalized block once. The earlier pairwise scan normalized every
+# later block again for every predecessor, making this rule O(blocks × source)
+# in text traversal even though normalization is block-local.
+type ExpBlock is Data:
+  ExpBlock{text: String, evidence: List<&2, T.Evidence>, eligible: Bool}
+
+def Mech.exp_prepare(blocks: List<&2, T.Block>) -> List<&2, ExpBlock>:
+  match blocks:
+    case Nil{}:
+      Nil{}
+    case Con{+b, t}:
+      +nt = Mech.norm_ws(Blk.text(b))
+      ExpBlock{nt, Blk.evidence(b), Nat.is_ge(Mech.word_count(nt), 12n)} <> Mech.exp_prepare(t)
+
 def Mech.dm_pick(hit: Bool, ev: List<&2, T.Evidence>, rec: Maybe<&2, List<&2, T.Evidence>>) -> Maybe<&2, List<&2, T.Evidence>>:
   match hit:
     case True{}:
@@ -814,12 +828,12 @@ def Mech.dm_pick(hit: Bool, ev: List<&2, T.Evidence>, rec: Maybe<&2, List<&2, T.
       rec
 
 # evidence of the first later block whose normalized text equals `nt`
-def Mech.dup_match(rest: List<&2, T.Block>, +nt: String) -> Maybe<&2, List<&2, T.Evidence>>:
+def Mech.dup_match(rest: List<&2, ExpBlock>, +nt: String) -> Maybe<&2, List<&2, T.Evidence>>:
   match rest:
     case Nil{}:
       None{}
-    case Con{+b, t}:
-      Mech.dm_pick(String.eq(Mech.norm_ws(Blk.text(b)), nt), Blk.evidence(b), Mech.dup_match(t, nt))
+    case Con{ExpBlock{text, evidence, eligible}, t}:
+      Mech.dm_pick(String.eq(text, nt), evidence, Mech.dup_match(t, nt))
 
 def Mech.exp_find(m: Maybe<&2, List<&2, T.Evidence>>, ev: List<&2, T.Evidence>) -> List<&2, T.Finding>:
   match m:
@@ -831,23 +845,24 @@ def Mech.exp_find(m: Maybe<&2, List<&2, T.Evidence>>, ev: List<&2, T.Evidence>) 
           "Two source-mapped blocks share identical normalized prose.",
           List.append(&2, T.Evidence, ev, ev2)) ]
 
-def Mech.exp_words(ok: Bool, nt: String, ev: List<&2, T.Evidence>, rest: List<&2, T.Block>) -> List<&2, T.Finding>:
-  match ok:
-    case False{}:
-      Nil{}
-    case True{}:
-      Mech.exp_find(Mech.dup_match(rest, nt), ev)
+def Mech.exp_one(eb: ExpBlock, rest: List<&2, ExpBlock>) -> List<&2, T.Finding>:
+  match eb:
+    case ExpBlock{text, evidence, eligible}:
+      match eligible:
+        case False{}:
+          Nil{}
+        case True{}:
+          Mech.exp_find(Mech.dup_match(rest, text), evidence)
 
-def Mech.exp_one(+b: T.Block, rest: List<&2, T.Block>) -> List<&2, T.Finding>:
-  +nt = Mech.norm_ws(Blk.text(b))
-  Mech.exp_words(Nat.is_ge(Mech.word_count(nt), 12n), nt, Blk.evidence(b), rest)
-
-def Mech.expanded_all(blocks: List<&2, T.Block>) -> List<&2, T.Finding>:
+def Mech.exp_go(blocks: List<&2, ExpBlock>) -> List<&2, T.Finding>:
   match blocks:
     case Nil{}:
       Nil{}
     case Con{b, +rest}:
-      List.append(&2, T.Finding, Mech.exp_one(b, rest), Mech.expanded_all(rest))
+      List.append(&2, T.Finding, Mech.exp_one(b, rest), Mech.exp_go(rest))
+
+def Mech.expanded_all(blocks: List<&2, T.Block>) -> List<&2, T.Finding>:
+  Mech.exp_go(Mech.exp_prepare(blocks))
 
 # --- rule: reference.route-edge (resolved internal link direction) ----------
 def Mech.fi_pick(hit: Bool, i: Nat, rec: Maybe<&2, Nat>) -> Maybe<&2, Nat>:

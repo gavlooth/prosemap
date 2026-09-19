@@ -160,10 +160,14 @@ def Ctx.prompt(+reader: String, evs: List<&2, T.Evidence>, +content: String) -> 
 
 # prepare the request from the raw Markdown content: parse, gather evidence,
 # re-verify it against the source, and expose the verified citable ids + objects.
+# The parser builds each Evidence from the block's own exact source substring
+# (Evidence.of), so it is correct by construction — no need to re-slice the whole
+# source per evidence here (that was O(n^2) and overflowed). Response candidates
+# are still checked against this evidence-id set in Ctx.candidates/Ctx.filter.
 def Ctx.prepare(+reader: String, +content: String) -> CtxReq:
   +sha = S.Sha256.hex(content)
-  +verified = Ctx.verify(content, sha, Ctx.all_ev(Md.Md.parse(content, sha)))
-  CtxReq{Ctx.prompt(reader, verified, content), Ctx.ev_ids(verified), verified}
+  +evs = Ctx.all_ev(Md.Md.parse(content, sha))
+  CtxReq{Ctx.prompt(reader, evs, content), Ctx.ev_ids(evs), evs}
 
 # --- response filtering: keep candidate lines citing a verified id ----------
 def Ctx.keep_line(inSet: Bool, line: String, rest: List<&2, String>) -> List<&2, String>:
