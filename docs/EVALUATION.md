@@ -1,59 +1,69 @@
 # Evaluation status
 
-The current evidence is implementation-level: Bend smoke programs exercise defined behaviors, and a formal Bend proof discharges specified laws. It is not a corpus evaluation, a live-provider evaluation, or evidence that the tool improves comprehension.
+Prosemap now has two distinct evidence layers: executable implementation checks
+and a frozen synthetic Markdown emission regression. Neither layer is an
+independently annotated writing-defect study or evidence of comprehension gains.
 
-## Executable smoke coverage
+## Frozen Markdown emission regression
 
-The smoke programs are standalone Bend programs under `prosemap/`. Run one as `bend prosemap/<name>_test.bend` (the basic program is `bend prosemap/test.bend`). They cover these concrete paths:
+`PROSEMAP_CMD=corpus bend prosemap/main.bend` reads
+`fixtures/corpus/cases.tsv` plus its Markdown documents. Each row freezes the
+document SHA-256, route, and complete expected set of emitted mechanical rule
+IDs. The evaluator rejects malformed rows, unknown rule IDs, duplicate
+document/route keys, unsafe filenames, missing documents, and hash mismatches.
+Any missing or unexpected rule emission fails the run.
 
-| Program(s) | Exercised behavior |
+The current corpus has nine document/route cases. It positively exercises ten
+of the twelve mechanical rules:
+
+| Rule coverage | Cases |
 | --- | --- |
-| `test`, `sha_test` | Evidence slicing/integrity, exact cohesion examples, and SHA-256 vectors. |
-| `utf8_test` | UTF-8 byte length, byte slicing, Unicode SHA-256 input, and Markdown evidence spans. |
-| `md_test`, `math_test` | Markdown blocks, heading/code analysis, inline/display/fenced math, and TeX extraction. |
-| `mech_test`, `mech_test2`, `mech_test3` | Mechanical structure/reference/source-pattern rules, fixed-point ARI, terminology density, route-edge, expanded-duplicate, and case-similar notation paths. |
-| `i3_test` | Introduction-density counting for `strong`, `b`, and `dfn` block tags. |
-| `gate_test`, `jr_test` | Exact-record comparison, gate violations, compact JSONL reconstruction, and gating parsed findings. |
-| `cmp2_test` | Conservative rule-and-anchor comparison: unequal groups become `unmatched`. |
-| `ctx_test` | Evidence re-verification and rejection of a forged excerpt. |
+| Heading depth and transition | deep heading jump |
+| Duplicate authored ID | repeated `{#same}` |
+| Expanded duplicate prose | whitespace-normalized repeated paragraph |
+| Unresolved and resolved route edges | whole-document and `intro`-only routes |
+| Case-similar notation | `$x$` and `$X$` in one section |
+| ARI eligibility | paragraph above the configured word/sentence thresholds |
+| Escaped pipes and ASCII diagram | prose source pattern plus fenced diagram |
+| Clean control | no expected emissions |
 
-These are smoke programs, not a labeled-corpus precision/recall suite. They demonstrate selected deterministic behaviors; they do not establish coverage for every Markdown construct or every document-writing failure mode.
+The passing frozen result is 11 expected emissions, 0 unexpected emissions, and
+0 missing emissions. Exact per-rule precision/recall is shown for regression
+convenience, but it measures agreement with synthetic emission expectations,
+not real-world defect accuracy.
 
-## Formal evidence
+`terminology.definition` and `terminology.introduction-density` remain
+unassessed in this corpus: the Markdown extractor does not emit `dfn`, `strong`,
+or `b` blocks. Their lower-level mechanical behavior remains smoke-tested, but
+claiming positive Markdown corpus coverage would be false.
 
-`LAWS.bend` states seven properties, and `PROOF.bend` supplies their Bend proofs. `bend PROOF.bend` is the proof command and prints `All terms check.` when all terms check. The guarantees are narrow and explicit:
+## Executable smoke and formal coverage
 
-1. Evidence constructed with `Evidence.mk` records the source byte slice.
-2. That constructed evidence satisfies hash-and-slice integrity re-verification.
-3. Empty lexical comparison leaves Jaccard and Dice unassessed.
-4. Any zero-denominator metric is unassessed.
-5. An empty candidate finding set passes the gate.
-6. Conservative comparison of unequal groups produces only unmatched records.
-7. A mechanical finding ID begins with its rule ID.
+Standalone Bend programs under `prosemap/` exercise UTF-8 evidence integrity,
+SHA-256 vectors, Markdown/math extraction, the mechanical rules, comparison,
+replay gating, JSONL reconstruction, contextual evidence admission, subprocess
+execution, and authored heading anchors. `bend PROOF.bend` checks seven stated
+laws covering evidence construction/integrity, unassessed zero-denominator
+metrics, conservative comparison and gate behavior, and finding-ID prefixes.
 
-The proof does not prove that Markdown extraction is complete, that a rule is pedagogically useful, that a source artifact represents the intended document, or that provider output is correct.
-
-## Fixture status
-
-`fixtures/md/sample.md` is the Markdown input fixture for the Bend pipeline. The pipeline does not automatically consume the fixture tree; an operator may pass this file as `PROSEMAP_INPUT`.
-
-The retained calibration, regression, and held-out HTML files are not Bend inputs. Nor are `fixtures/manifest.json`, `reader-profile.json`, `rules.json`, or `surface.json` currently read by the Bend program. Their historical labels and expected-rule lists must therefore not be reported as Bend evaluation results.
-
-In particular, the old HTML fixture split cannot currently provide parser parity, label precision/recall, or held-out performance evidence. Such a study first requires a separately specified HTML-to-Markdown bridge and a decision about what source-span equivalence means after conversion.
+These checks establish deterministic implementation behavior only. They do not
+prove extractor completeness, pedagogical usefulness, or provider judgment
+quality.
 
 ## Contextual boundary
 
-The contextual module proves and smoke-exercises only the evidence re-verification predicate: cited excerpts must equal the source at their UTF-8 byte spans and carry the expected document hash. The command-side transport is a plaintext loopback POST to `127.0.0.1`; it prints a response body and does not parse, score, or persist a provider candidate.
+The provider-neutral subprocess stage accepts candidate records only when their
+cited evidence IDs re-verify against the prepared source evidence. Reviews can
+then reject accepted candidates before artifact emission. This path is
+implemented and smoke-exercised; no live-provider accuracy, repeatability, cost,
+or reviewer-agreement result is claimed.
 
-No live-provider quality, repeatability, cost, safety, or human-agreement result is claimed. The evidence predicate is necessary for accepting cited candidates, but it does not establish the truth or usefulness of their prose judgments.
+## Remaining validation work
 
-## Open validation work
-
-The following remain open rather than implied by the smoke programs or laws:
-
-- corpus-level rule evaluation on Markdown fixtures with independently reviewed labels;
-- a documented conversion/parity study before reusing retained HTML assets as Bend evaluation data;
-- broader Unicode and Markdown-construct coverage beyond the extractor's supported subset;
-- an end-to-end contextual-provider protocol that parses candidate records and applies the verified-evidence admission predicate;
-- reader studies or other independent evidence for comprehension effects; and
-- any rendered-surface validation. Chromium checks, HTML ingestion, PDF checks, and HTTPS transport are not implemented by this Bend pipeline.
+- obtain independently reviewed Markdown labels before reporting defect
+  precision, recall, or rule usefulness;
+- extend Markdown extraction if terminology rules should receive positive
+  source-level corpus coverage;
+- broaden Unicode and supported-Markdown boundary cases;
+- evaluate contextual candidates against independent reviewers; and
+- obtain direct reader-outcome evidence before making comprehension claims.

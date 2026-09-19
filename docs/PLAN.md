@@ -81,26 +81,31 @@ Replay strengthens stored-artifact trust. With both selected Markdown sources su
 - Twelve mechanical rule families, report rendering, compact findings JSONL, and compact manifest output.
 - Direct and conservative finding comparison, replay verification, and a narrow allowlisted gate.
 - Artifact write ordering with a completion marker.
-- Loopback plaintext contextual request helper and pure evidence re-verification.
+- Provider-neutral contextual subprocess integration with evidence-verified candidate admission and reviews.
 - Seven machine-checked laws in `LAWS.bend` discharged by `PROOF.bend`.
 
-### Next: evaluation on Markdown evidence
+### Completed: synthetic Markdown emission regression
 
-Build a frozen Markdown corpus with independently reviewed labels and an explicit mapping from each label to a supported rule. Assess false positives, misses, and the usefulness of individual rule families. Keep neutral observations distinct from defects, and do not tune on held-out data.
+The frozen `fixtures/corpus` suite validates document hashes, routes, and the
+complete expected mechanical-rule emission set. Nine cases positively exercise
+ten rule families and include route and clean controls. The two terminology
+rules remain unassessed because the Markdown extractor does not produce their
+term block tags. These implementation-authored labels test deterministic
+regression behavior; they are not independent defect judgments.
 
-This phase should also define acceptance boundaries for the supported Markdown subset, including non-ASCII spans, links, TeX, code, and malformed/unsupported constructs. Corpus results should report the exact extractor and rule configuration used.
+### Next: independent content evaluation
 
-### Deferred: HTML ingestion and conversion parity
+Obtain independently reviewed Markdown labels before assessing false positives,
+misses, or rule usefulness. Define the supported Markdown and Unicode
+boundaries, keep neutral observations distinct from defects, and do not tune on
+held-out documents. Extend the extractor first if terminology rules need
+positive source-level evaluation.
 
-The retained HTML fixtures are research assets, not current input. A future HTML path needs an explicit adapter or a documented external conversion workflow, source-span semantics after conversion, and parity tests before their expected labels can become Bend evaluation data. It must not imply that an HTML source location is editable Markdown evidence without a specified mapping.
-
-### Deferred: rendered surfaces
-
-No rendered-surface validation exists in the Bend implementation. Any future Chromium or PDF work must be a separately specified stage with reproducible environment provenance, asset policy, and failure reporting. A source heuristic must not certify a rendered document, and a surface-stage absence must not be relabeled as a pass.
-
-### Deferred: contextual judgment and secure remote transport
-
-The present contextual boundary is loopback plaintext TCP/HTTP only. A production provider protocol would need a candidate record schema, source/document-hash verification before admission, bounded request/response handling, explicit credential policy, and—if remote communication is required—an HTTPS/TLS implementation. It should be evaluated for citation accuracy, review agreement, repeatability, cost, and abstention behavior before any gating or pedagogical claim.
+The contextual stage now parses provider-neutral subprocess candidates,
+re-verifies cited source evidence, applies reviews, and merges admitted
+candidates into artifacts. Its next step is an independent reviewer study of
+citation accuracy, agreement, repeatability, cost, and abstention behavior—not
+additional transport-specific scaffolding.
 
 ### Deferred: reader-outcome evidence
 

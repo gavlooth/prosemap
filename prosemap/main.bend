@@ -22,6 +22,7 @@ import ./reviews.bend as Rv
 import ./route.bend as Rt
 import ./evaluation.bend as Eval
 import ./artifacts.bend as Art
+import ./corpus.bend as Cp
 
 # all rendered artifacts from one analysis pass
 type CliOut is Data:
@@ -347,8 +348,15 @@ def Cli.dispatch2(isGate: Bool, isContext: Bool, isEvaluate: Bool, isLatex: Bool
     case False{}:
       Cli.dispatch3(isContext, isEvaluate, isLatex)
 
+def Cli.dispatch1(isCorpus: Bool, isGate: Bool, isContext: Bool, isEvaluate: Bool, isLatex: Bool) -> IO(Unit):
+  match isCorpus:
+    case True{}:
+      Cp.Cp.flow()
+    case False{}:
+      Cli.dispatch2(isGate, isContext, isEvaluate, isLatex)
+
 def Cli.dispatch(+cmd: String) -> IO(Unit):
-  Cli.dispatch2(String.eq(cmd, "gate"), String.eq(cmd, "context"), String.eq(cmd, "evaluate"), String.eq(cmd, "latex"))
+  Cli.dispatch1(String.eq(cmd, "corpus"), String.eq(cmd, "gate"), String.eq(cmd, "context"), String.eq(cmd, "evaluate"), String.eq(cmd, "latex"))
 def main() -> IO(Unit):
   do IO<Unit>:
     cmdr : Result<&1, &1, U32 & String, String> <- IO.get_env("PROSEMAP_CMD")

@@ -2,13 +2,17 @@
 
 This inventory separates historical research material from assets consumed by the current Bend-only Markdown pipeline. Retaining an asset records its provenance; it does not make the asset an input or validation result for the implementation.
 
-## Pipeline-consumed asset
+## Pipeline-consumed assets
 
 | Asset | Current role |
 | --- | --- |
-| `fixtures/md/sample.md` | Markdown smoke/input fixture. It is consumable by the Bend analyzer when selected as `PROSEMAP_INPUT`; it is not loaded automatically. |
+| `fixtures/md/sample.md` | Operator-selectable Markdown smoke/input fixture. |
+| `fixtures/corpus/cases.tsv` | Frozen SHA-256, route, and complete expected mechanical-rule emission sets for the `corpus` command. |
+| `fixtures/corpus/*.md` | Eight synthetic Markdown documents covering nine document/route cases. |
 
-The source adapter accepts Markdown supplied by the operator. It does not read the fixture manifest, profiles, rule configuration, or surface configuration.
+The corpus assets are deterministic regression inputs authored with the
+implementation. They are not independent annotations and cannot establish
+real-document defect precision, recall, or usefulness.
 
 ## Retained but unconsumed research assets
 

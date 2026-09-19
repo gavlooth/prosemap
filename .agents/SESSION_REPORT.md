@@ -80,3 +80,19 @@ Signature: openai-router/deepseek/deepseek-v4.1-flash
 - Dependencies/restart requirements: `/home/heefoo/.bend/bin/bend` (Bend 2.0.5). No external service required for the verified paths.
 
 Signature: openrouter/deepseek/deepseek-v4.1-flash
+
+## 2026-09-19T11:47:58+03:00 — Frozen Markdown emission corpus completed
+
+- Objective: take over the remaining Prosemap work by implementing the next recorded action: a frozen Markdown corpus and deterministic evaluation of mechanical-rule emissions.
+- Workspace: `/home/heefoo/Documents/code/prosemap`; based on published `main` commit `1cd2be94`.
+- Code and configuration changes: added `prosemap/corpus.bend`; added `PROSEMAP_CMD=corpus` with optional `PROSEMAP_CORPUS_DIR`; added eight SHA-256-frozen Markdown documents and nine document/route cases in `fixtures/corpus`; updated README, roadmap, evaluation status, and asset inventory.
+- Implementation coverage: 100% of the scoped corpus command and fail-closed validation. The synthetic corpus positively exercises 10/12 mechanical rule families; `terminology.definition` and `terminology.introduction-density` are explicitly unassessed because the Markdown extractor does not emit `dfn`, `strong`, or `b` blocks.
+- Commands run: `bend prosemap/corpus.bend`; `PROSEMAP_CMD=corpus bend prosemap/main.bend`; throwaway isolated-corpus runs for bad hashes, unknown rules, malformed rows, and expectation mismatches; `bend PROOF.bend`; all 14 Bend smoke programs; `sha256sum fixtures/corpus/*.md`; `jj diff --stat`.
+- Key results: the frozen run reports nine cases, 11 expected emissions, zero unexpected emissions, zero misses, and `CORPUS PASS`. Bad hash reports `CORPUS FAIL (input verification)`; unknown rule and malformed row report `CORPUS FAIL (invalid manifest)`; altered expectation reports `CORPUS FAIL (emission mismatch)`. All laws and all smoke programs returned exit 0.
+- Negative memory and invalidated assumptions: implementation-authored synthetic labels are regression expectations, not independent writing-defect judgments; their exact precision/recall cannot be presented as real-world efficacy. The Markdown extractor cannot currently provide positive corpus coverage for the two terminology rules. The abandoned 652-line draft evaluator was incomplete and structurally invalid; it was replaced with a smaller strict four-column corpus format rather than repaired.
+- Current recommendation: use `PROSEMAP_CMD=corpus` as the deterministic mechanical emission regression. Before reporting defect precision, recall, or usefulness, obtain independently reviewed Markdown labels. Extend Markdown term extraction first if positive source-level terminology coverage is required.
+- Unresolved issues: independent annotations, terminology markup extraction, broader Unicode/Markdown boundary coverage, contextual reviewer evaluation, and reader-outcome evidence remain open research work.
+- Next actions: collect independently reviewed content labels; decide whether terminology markup belongs in the supported Markdown subset; then evaluate provider candidates against those reviews.
+- Dependencies, blockers, restart requirements: Bend 2.0.5 at `/home/heefoo/.bend/bin/bend`; no external service or restart required.
+
+Signature: openai-codex/gpt-6-astra

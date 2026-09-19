@@ -15,16 +15,15 @@ comprehension.
 ## Status
 
 Working local CLI with source-backed mechanical analysis, immutable run artifacts,
-cross-version comparison, a replay-verified CI gate, and an opt-in contextual stage
-whose evidence references are re-verified before any candidate is accepted.
+cross-version comparison, a replay-verified CI gate, a frozen Markdown emission
+regression corpus, real TeX parser integration, and an opt-in provider-neutral
+contextual stage whose evidence references are re-verified before acceptance.
 
-Honest boundaries:
+Operational boundaries:
 
-- **Input is Markdown.** Pandoc is the bridge for HTML and other formats.
-- **No Chromium/surface stage.** Rendering checks are not implemented here.
-- **Contextual transport is loopback TCP only.** Bend has no DNS/TLS, so remote
-  HTTPS providers need an external bridge.
-- **PASS/FAIL is reported on stdout.** There is no exit-code policy; Bend's runner
+- Input and source evidence are Markdown.
+- Contextual and TeX tools run through a bounded subprocess FFI; failures abstain.
+- PASS/FAIL is reported on stdout. There is no exit-code policy; Bend's runner
   exits nonzero only on runtime errors such as an unreadable input file.
 
 ## Run
@@ -49,6 +48,10 @@ PROSEMAP_CMD=gate PROSEMAP_BASE=base.jsonl PROSEMAP_CANDIDATE=findings.jsonl \
 # evaluate: comparison + replay-verified gate over two runs
 PROSEMAP_CMD=evaluate PROSEMAP_BASE_RUN=.runs/base PROSEMAP_CANDIDATE_RUN=.runs/candidate \
   bend prosemap/main.bend
+
+# frozen synthetic rule-emission regression
+PROSEMAP_CMD=corpus bend prosemap/main.bend
+# -> per-rule exact counts followed by CORPUS PASS/FAIL
 ```
 
 | Command | Environment | Output |
@@ -58,6 +61,7 @@ PROSEMAP_CMD=evaluate PROSEMAP_BASE_RUN=.runs/base PROSEMAP_CANDIDATE_RUN=.runs/
 | `evaluate` | `PROSEMAP_BASE`/`PROSEMAP_CANDIDATE` + both source variables, or `PROSEMAP_BASE_RUN`/`PROSEMAP_CANDIDATE_RUN` directories holding `input.md` + `findings.jsonl` | `EVALUATE PASS/FAIL (n comparison record(s))` |
 | `context` | `PROSEMAP_INPUT`, `PROSEMAP_LLM_CMD` (unset ⇒ skipped), `PROSEMAP_LLM_TIMEOUT` (ms, def 60000), `PROSEMAP_LLM_MAX_BYTES` (def 1 MiB) | evidence-verified candidate lines |
 | `latex` | `PROSEMAP_INPUT`, `PROSEMAP_KATEX_CMD` (unset ⇒ skipped) | `formula.unparsable` findings for unparsable math |
+| `corpus` | optional `PROSEMAP_CORPUS_DIR` (default `fixtures/corpus`) | hash-verified per-rule emission matrix and `CORPUS PASS/FAIL` |
 
 **FFI shim.** A single generic subprocess effect (`prosemap/effs/exec.js`, `Exec.run`) lets Bend
 shell out to external tools; it powers `latex` (a real KaTeX/TeX parser), `context` (any LLM CLI —
@@ -114,13 +118,14 @@ rename-atomic. The manifest's `sourceSha256` matches `sha256sum` of the input.
 | `comparison.bend` | diff by `recordId` (`compare`) and rule/anchor grouping with conservative `unmatched` (`compare2`) |
 | `gate.bend` | CI gate over newly added allowlisted observations, plus replay verification |
 | `evaluation.bend` | comparison + replay-verified gate over two runs |
+| `corpus.bend` | frozen Markdown corpus validation, exact emission scoring, and fail-closed input checks |
 | `exec.bend` | the subprocess FFI shim (`effs/exec.js`) used by the `latex` and `context` stages |
 | `latex.bend` | TeX snippets extracted from blocks → `formula.unparsable` findings via `PROSEMAP_KATEX_CMD` |
-| `contextual.bend` | contextual requests, loopback TCP transport, evidence re-verification |
+| `contextual.bend` | contextual requests, provider-neutral candidate parsing, and evidence re-verification |
 | `json.bend` / `json_read.bend` | deterministic JSON emit / targeted findings reader |
 | `report.bend` | findings → Markdown report |
 | `artifacts.bend` | artifact commit protocol (write artifacts, then the marker) |
-| `main.bend` | env-driven entry point: `analyze`, `gate`, `context`, `evaluate` |
+| `main.bend` | env-driven entry point: `analyze`, `gate`, `context`, `evaluate`, `latex`, `corpus` |
 
 ## Laws
 
@@ -160,6 +165,7 @@ bend prosemap/cmp2_test.bend          # comparison grouping
 bend prosemap/ctx_test.bend           # contextual evidence re-verification
 bend prosemap/i3_test.bend            # rule-ID / finding construction
 bend prosemap/jr_test.bend            # findings.jsonl reader
+PROSEMAP_CMD=corpus bend prosemap/main.bend # frozen Markdown emission regression
 ```
 
 ## Design
