@@ -23,86 +23,120 @@ Operational boundaries:
 
 - Input and source evidence are Markdown.
 - Contextual and TeX tools run through a bounded subprocess FFI; failures abstain.
-- PASS/FAIL is reported on stdout. There is no exit-code policy; Bend's runner
-  exits nonzero only on runtime errors such as an unreadable input file.
+- The public `bin/prosemap` command returns conventional success/failure status;
+  the underlying Bend entry point communicates policy PASS/FAIL on stdout.
 
-## Run
+## Install the command
 
-Bend has no argv, so the command and paths come from the environment.
+The Bend core has no argument API, so `bin/prosemap` provides the normal
+human-facing command line and keeps the internal environment protocol hidden.
+Run it directly:
 
 ```sh
-# analyze: Markdown -> report.md + findings.jsonl + manifest.json (+ completion marker)
-PROSEMAP_INPUT=fixtures/md/sample.md bend prosemap/main.bend
-
-# gate: compare stored base vs candidate findings and enforce the CI policy
-PROSEMAP_CMD=gate PROSEMAP_BASE=base.jsonl PROSEMAP_CANDIDATE=findings.jsonl \
-  bend prosemap/main.bend
-# -> "GATE PASS (0 violation(s))" or "GATE FAIL (n violation(s))"
-
-# gate with replay verification: re-run deterministic analysis from source and
-# require exact agreement with the stored findings before gating
-PROSEMAP_CMD=gate PROSEMAP_BASE=base.jsonl PROSEMAP_CANDIDATE=findings.jsonl \
-  PROSEMAP_BASE_SOURCE=base.md PROSEMAP_CANDIDATE_SOURCE=candidate.md \
-  bend prosemap/main.bend
-
-# evaluate: comparison + replay-verified gate over two runs
-PROSEMAP_CMD=evaluate PROSEMAP_BASE_RUN=.runs/base PROSEMAP_CANDIDATE_RUN=.runs/candidate \
-  bend prosemap/main.bend
-
-# frozen synthetic rule-emission regression
-PROSEMAP_CMD=corpus bend prosemap/main.bend
-# -> per-rule exact counts followed by CORPUS PASS/FAIL
-
-# adjudicated mechanical labels (labels.tsv + Markdown files)
-PROSEMAP_CMD=label-evaluate PROSEMAP_LABEL_DIR=/path/to/adjudicated-corpus \
-  bend prosemap/main.bend
-
-# contextual findings reviewed by at least two distinct reviewer IDs
-PROSEMAP_CMD=review-evaluate PROSEMAP_FINDINGS=findings.jsonl \
-  PROSEMAP_REVIEWS=reviews.jsonl bend prosemap/main.bend
+./bin/prosemap --help
 ```
 
-| Command | Environment | Output |
-|---|---|---|
-| `analyze` (default) | `PROSEMAP_INPUT`, `PROSEMAP_OUTPUT`, `PROSEMAP_JSONL`, `PROSEMAP_MANIFEST`, `PROSEMAP_COMPLETE`, optional `PROSEMAP_REVIEWS`, `PROSEMAP_READER`, `PROSEMAP_ROUTE`, `PROSEMAP_LLM_CMD` | report on stdout + three artifacts + completion marker |
-| `gate` | `PROSEMAP_BASE`, `PROSEMAP_CANDIDATE`, optional `PROSEMAP_BASE_SOURCE`, `PROSEMAP_CANDIDATE_SOURCE` | `GATE PASS/FAIL (n violation(s))` |
-| `evaluate` | `PROSEMAP_BASE`/`PROSEMAP_CANDIDATE` + both source variables, or `PROSEMAP_BASE_RUN`/`PROSEMAP_CANDIDATE_RUN` directories holding `input.md` + `findings.jsonl` | `EVALUATE PASS/FAIL (n comparison record(s))` |
-| `context` | `PROSEMAP_INPUT`, `PROSEMAP_LLM_CMD` (unset ⇒ skipped), `PROSEMAP_LLM_TIMEOUT` (ms, def 60000), `PROSEMAP_LLM_MAX_BYTES` (def 1 MiB) | evidence-verified candidate lines |
-| `latex` | `PROSEMAP_INPUT`, `PROSEMAP_KATEX_CMD` (unset ⇒ skipped) | `formula.unparsable` findings for unparsable math |
-| `corpus` | optional `PROSEMAP_CORPUS_DIR` (default `fixtures/corpus`) | hash-verified per-rule emission matrix and `CORPUS PASS/FAIL` |
-| `label-evaluate` | required `PROSEMAP_LABEL_DIR` containing `labels.tsv` and its Markdown files | hash-verified TP/FP/FN/neutral matrix and `LABEL EVALUATE PASS/FAIL` |
-| `review-evaluate` | `PROSEMAP_FINDINGS`, `PROSEMAP_REVIEWS` | contextual-review coverage, consensus/disagreement, integrity checks, and `REVIEW EVALUATE PASS/FAIL` |
+Or put it on your path:
 
-**FFI shim.** A single generic subprocess effect (`prosemap/effs/exec.js`, `Exec.run`) lets Bend
-shell out to external tools; it powers `latex` (a real KaTeX/TeX parser), `context` (any LLM CLI —
-prompt on stdin, JSON candidates on stdout, every cited evidence id re-verified against the source),
-and is the pattern for pandoc-based ingestion. A failed tool probe abstains rather than flagging.
+```sh
+mkdir -p ~/.local/bin
+ln -sf "$(pwd)/bin/prosemap" ~/.local/bin/prosemap
+```
 
-**Reviews.** `PROSEMAP_REVIEWS=reviews.jsonl` applies human dispositions during `analyze`; a line
-`{"findingRecordId":..,"disposition":"rejected|accepted|needs-context","rationale":..}` with
-`rejected` suppresses that finding from every artifact (and hence from the gate).
+The wrapper finds `bend` on `PATH`, then falls back to
+`~/.bend/bin/bend`.
 
-`label-evaluate` expects five tab-separated fields per case:
-`document`, `sha256`, `route`, `defect-rules`, `neutral-rules`; `-` means an
-empty route or rule set, and every unlisted rule is labeled absent. The command
-can calculate exact rule-level precision and recall, but reviewer independence
-and adjudication provenance are study inputs, not facts the executable can
-prove.
+## Analyze a document
 
-`review-evaluate` requires at least two distinct reviewer IDs for every
-`contextual.model@1` finding and fails on missing coverage, malformed rows,
-orphan reviews, or duplicate reviewer/finding pairs. Disagreement is reported
-as a study result rather than silently resolved.
+```sh
+prosemap document.md
+```
 
-**Reader profile and reading route.** `PROSEMAP_READER=<file>` embeds the reader's declared
-context (assumed knowledge, what is not assumed, objective) in the contextual prompt, so
-candidates are judged for that reader rather than for no one. `PROSEMAP_ROUTE=<file>` scopes
-analysis to a chosen set of section anchors, one per line: blocks whose section anchor is off the
-route are not analyzed, so the run describes the reader's actual path through the document. An
-unset or empty route is the whole document. Because off-route content is out of scope, a link
-into an off-route section is reported as unresolved — the path being analyzed cannot follow it.
-The reader profile and the route are independent: the route scopes the mechanical pass, the
-profile conditions the contextual pass.
+That prints the report and writes a complete run to
+`.prosemap/document/`:
+
+- `report.md` — human-readable findings;
+- `findings.jsonl` — machine-readable findings;
+- `manifest.json` — source hash and run metadata; and
+- `manifest.json.complete` — written last, proving the bundle completed.
+
+Choose another output directory or explicitly spell the command:
+
+```sh
+prosemap document.md --out .runs/document
+prosemap analyze document.md --out .runs/document
+```
+
+Optional analysis flags:
+
+```text
+--route FILE       section anchors to analyze, one per line
+--reader FILE      intended-reader profile for contextual review
+--reviews FILE     accepted/rejected/needs-context review JSONL
+--llm-cmd COMMAND  optional contextual-model command
+```
+
+## Other commands
+
+```sh
+# verify the built-in regression corpus
+prosemap corpus
+
+# replay-verified CI comparison; exits 1 on a reported gate failure
+prosemap gate base.jsonl candidate.jsonl base.md candidate.md
+
+# compare two stored run directories
+prosemap evaluate .runs/base .runs/candidate
+
+# run only the contextual stage
+prosemap context document.md --llm-cmd "your-llm-cli"
+
+# validate formulas with an external KaTeX-compatible command
+prosemap latex document.md --katex-cmd "your-katex-cli"
+
+# score externally adjudicated mechanical labels
+prosemap label-evaluate /path/to/adjudicated-corpus
+
+# check contextual findings reviewed by two or more reviewers
+prosemap review-evaluate findings.jsonl reviews.jsonl
+```
+
+`corpus`, `gate`, `evaluate`, `label-evaluate`, and `review-evaluate` return
+nonzero when their printed result is FAIL. Run `prosemap help` for the complete
+syntax.
+
+## Optional contextual review
+
+The command passed to `--llm-cmd` receives a prompt on stdin and emits one JSON
+candidate per line on stdout. Every cited evidence ID is checked against the
+source before the candidate is admitted. A failed or timed-out command abstains
+instead of inventing a finding.
+
+`--reviews reviews.jsonl` applies dispositions during analysis. A review line
+has this form:
+
+```json
+{"findingRecordId":"contextual:abc","reviewer":"alice","disposition":"rejected","rationale":"The cited paragraph already defines the term."}
+```
+
+Rejected findings are omitted from the report and artifacts.
+
+For adjudicated mechanical evaluation, `labels.tsv` has five tab-separated
+fields: `document`, `sha256`, `route`, `defect-rules`, and `neutral-rules`.
+Use `-` for an empty route or rule set; every unlisted rule is labeled absent.
+
+`review-evaluate` requires two distinct reviewer IDs for every
+`contextual.model@1` finding. It fails on missing coverage, malformed rows,
+orphan reviews, or duplicate reviewer/finding pairs; disagreement is reported
+rather than silently resolved.
+
+**Reader profile and reading route.** `--reader <file>` embeds the reader's
+declared context (assumed knowledge, what is not assumed, objective) in the
+contextual prompt. `--route <file>` scopes analysis to the listed section
+anchors. An unset or empty route means the whole document. Because off-route
+content is out of scope, a link into an excluded section is reported as
+unresolved. The route scopes the mechanical pass; the profile conditions the
+contextual pass.
 
 **Heading anchors.** A heading may carry an authored anchor: `## Methods {#methods}` makes
 `methods` both the section anchor and the heading's authored ID, so `[text](#methods)` resolves
@@ -110,11 +144,10 @@ and a route can name `methods` instead of a byte offset. The marker is stripped 
 text; a heading without one keeps its `sec-<byte-offset>` anchor, and `{#}` names nothing.
 Duplicate slugs are reported by `structure.duplicate-id`, like any other duplicated authored ID.
 
-Because PASS/FAIL is a stdout contract, CI wraps it, for example:
-
-```sh
-PROSEMAP_CMD=gate ... bend prosemap/main.bend | grep -q '^GATE PASS'
-```
+The `bin/prosemap` wrapper converts printed PASS/FAIL results into conventional
+process exit status: PASS returns 0 and FAIL returns 1. Directly invoking the
+Bend entry point remains an internal interface whose PASS/FAIL contract is
+stdout-only.
 
 ## Artifacts
 
@@ -125,6 +158,10 @@ Bend's `File` API exposes no atomic rename, so visibility is marker-gated rather
 rename-atomic. The manifest's `sourceSha256` matches `sha256sum` of the input.
 
 ## Modules (`prosemap/`)
+
+`bin/prosemap` is the public argument-based CLI. It validates arguments,
+selects output paths, translates policy results to exit status, and invokes the
+Bend core.
 
 | File | Role |
 |------|------|
@@ -144,12 +181,12 @@ rename-atomic. The manifest's `sourceSha256` matches `sha256sum` of the input.
 | `label_eval.bend` | adjudicated defect/neutral/absent labels → exact rule-level TP/FP/FN |
 | `review_eval.bend` | independent contextual-review coverage, consensus, disagreement, and integrity checks |
 | `exec.bend` | the subprocess FFI shim (`effs/exec.js`) used by the `latex` and `context` stages |
-| `latex.bend` | TeX snippets extracted from blocks → `formula.unparsable` findings via `PROSEMAP_KATEX_CMD` |
+| `latex.bend` | TeX snippets extracted from blocks → `formula.unparsable` findings for the command supplied with `--katex-cmd` |
 | `contextual.bend` | contextual requests, provider-neutral candidate parsing, and evidence re-verification |
 | `json.bend` / `json_read.bend` | deterministic JSON emit / targeted findings reader |
 | `report.bend` | findings → Markdown report |
 | `artifacts.bend` | artifact commit protocol (write artifacts, then the marker) |
-| `main.bend` | env-driven entry point for analysis, comparison, corpus, label, and review commands |
+| `main.bend` | internal environment-driven Bend entry point used by `bin/prosemap` |
 
 ## Laws
 
@@ -190,11 +227,10 @@ bend prosemap/ctx_test.bend           # contextual evidence re-verification
 bend prosemap/i3_test.bend            # rule-ID / finding construction
 bend prosemap/jr_test.bend            # findings.jsonl reader
 bend prosemap/study_test.bend         # adjudicated labels + independent reviews
-PROSEMAP_CMD=corpus bend prosemap/main.bend # frozen Markdown emission regression
-PROSEMAP_CMD=review-evaluate \
-  PROSEMAP_FINDINGS=fixtures/contextual-pilot/findings.jsonl \
-  PROSEMAP_REVIEWS=fixtures/contextual-pilot/reviews.jsonl \
-  bend prosemap/main.bend             # preserved non-human pilot replay
+bin/prosemap corpus                    # frozen Markdown emission regression
+bin/prosemap review-evaluate \
+  fixtures/contextual-pilot/findings.jsonl \
+  fixtures/contextual-pilot/reviews.jsonl # preserved non-human pilot replay
 ```
 
 ## Design

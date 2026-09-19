@@ -8,9 +8,13 @@ Other document formats are outside the input adapter. Convert them to Markdown b
 
 ## Runtime boundary
 
-Bend has no argv interface, so `prosemap/main.bend` is configured entirely through environment variables:
+`bin/prosemap` is the public CLI. It accepts positional commands and ordinary
+flags, resolves the repository and Bend executable, chooses artifact paths,
+rejects invalid arguments, and maps printed policy PASS/FAIL to conventional
+process exit status. Because Bend has no argv interface, the wrapper translates
+those arguments into this private `main.bend` protocol:
 
-| `PROSEMAP_CMD` | Inputs | Result |
+| Internal command | Inputs | Result |
 | --- | --- | --- |
 | `analyze` (default) | `PROSEMAP_INPUT` plus optional route, reader, reviews, and LLM command | Deterministic analysis, admitted contextual candidates, artifacts, and report. |
 | `gate` | `PROSEMAP_BASE` and `PROSEMAP_CANDIDATE` findings JSONL files | Gate result; optional source paths enable replay verification. |
@@ -21,13 +25,15 @@ Bend has no argv interface, so `prosemap/main.bend` is configured entirely throu
 | `label-evaluate` | required `PROSEMAP_LABEL_DIR` | Adjudicated defect/neutral/absent rule scoring. |
 | `review-evaluate` | findings and review JSONL paths | Contextual-review coverage and agreement report. |
 
-Commands print their result to stdout. There is no Prosemap exit-code policy:
-Bend reports nonzero only for runtime failures, not printed PASS or FAIL.
+The Bend entry point prints policy results to stdout. The public wrapper returns
+0 for PASS, 1 for a printed FAIL, 2 for CLI misuse, and the underlying Bend
+status for runtime errors.
 
 ## Module boundaries
 
 | Module(s) | Responsibility | Boundary and limits |
 | --- | --- | --- |
+| `bin/prosemap` | Public command-line interface | Parses positional commands and flags, isolates invocations from inherited `PROSEMAP_*` variables, and translates Bend policy output into exit status. |
 | `prosemap/types.bend` | Core algebraic data types for blocks, evidence, findings, metrics, and comparisons | Defines the in-memory records; it does not validate general JSON. |
 | `prosemap/utf8.bend`, `prosemap/sha256.bend`, `prosemap/contracts.bend` | UTF-8 byte operations, pure SHA-256, evidence construction and re-verification | Evidence spans are UTF-8 byte offsets and excerpts are re-sliced from source. |
 | `prosemap/markdown.bend` | Markdown extraction | Extracts ATX headings, paragraphs, fenced code/math, inline/display TeX, internal links, `**strong**` terms, and `<dfn>` definitions into source-mapped blocks. |
@@ -37,7 +43,7 @@ Bend reports nonzero only for runtime failures, not printed PASS or FAIL.
 | `prosemap/label_eval.bend`, `prosemap/review_eval.bend` | Adjudicated rule scoring and contextual-review evaluation | Validate hashes, labels, reviewer coverage, orphans, duplicates, and disagreement; reviewer independence remains external provenance. |
 | `prosemap/artifacts.bend` | Artifact write ordering | Writes the completion marker last; Bend's file API supplies no atomic rename. |
 | `prosemap/contextual.bend`, `prosemap/exec.bend` | Provider-neutral prompt/candidate boundary and bounded subprocess execution | Only candidates citing prepared evidence IDs are admitted; provider failure abstains. |
-| `prosemap/main.bend` | Environment dispatch and file I/O | Coordinates the commands above without adding a second execution model. |
+| `prosemap/main.bend` | Private environment dispatch and file I/O | Receives only the wrapper's normalized internal protocol and coordinates the Bend modules. |
 
 ## Analyze flow
 

@@ -1,0 +1,292 @@
+#!/bin/sh
+set -eu
+
+SELF=$(readlink -f "$0")
+ROOT=$(dirname "$(dirname "$SELF")")
+MAIN="$ROOT/prosemap/main.bend"
+
+if command -v bend >/dev/null 2>&1; then
+  BEND=$(command -v bend)
+elif [ -x "$HOME/.bend/bin/bend" ]; then
+  BEND="$HOME/.bend/bin/bend"
+else
+  printf '%s\n' 'prosemap: Bend is not installed or not on PATH' >&2
+  exit 127
+fi
+
+# Arguments are the public interface. Ignore inherited Prosemap variables so a
+# prior shell session cannot silently alter this invocation.
+unset PROSEMAP_CMD PROSEMAP_INPUT PROSEMAP_OUTPUT PROSEMAP_JSONL
+unset PROSEMAP_MANIFEST PROSEMAP_COMPLETE PROSEMAP_ROUTE PROSEMAP_READER
+unset PROSEMAP_REVIEWS PROSEMAP_LLM_CMD PROSEMAP_LLM_TIMEOUT
+unset PROSEMAP_LLM_MAX_BYTES PROSEMAP_KATEX_CMD PROSEMAP_BASE
+unset PROSEMAP_CANDIDATE PROSEMAP_BASE_SOURCE PROSEMAP_CANDIDATE_SOURCE
+unset PROSEMAP_BASE_RUN PROSEMAP_CANDIDATE_RUN PROSEMAP_CORPUS_DIR
+unset PROSEMAP_LABEL_DIR PROSEMAP_FINDINGS
+
+usage() {
+  cat <<'EOF'
+Usage:
+  prosemap FILE [--out DIR] [--route FILE] [--reader FILE]
+                [--reviews FILE] [--llm-cmd COMMAND]
+  prosemap analyze FILE [same options]
+  prosemap context FILE --llm-cmd COMMAND [--reader FILE]
+  prosemap latex FILE --katex-cmd COMMAND
+  prosemap gate BASE.jsonl CANDIDATE.jsonl [BASE.md CANDIDATE.md]
+  prosemap evaluate BASE_RUN_DIR CANDIDATE_RUN_DIR
+  prosemap corpus [CORPUS_DIR]
+  prosemap label-evaluate LABEL_DIR
+  prosemap review-evaluate FINDINGS.jsonl REVIEWS.jsonl
+  prosemap help
+
+The default analysis output directory is .prosemap/<input-name>/.
+EOF
+}
+
+need_arg() {
+  if [ "$#" -lt 2 ]; then
+    printf 'prosemap: %s requires a value\n' "$1" >&2
+    exit 2
+  fi
+}
+
+run_status() {
+  expected=$1
+  shift
+  set +e
+  output=$("$BEND" "$MAIN" 2>&1)
+  status=$?
+  set -e
+  printf '%s\n' "$output"
+  if [ "$status" -ne 0 ]; then
+    return "$status"
+  fi
+  case "$output" in
+    *"$expected"*) return 0 ;;
+    *) return 1 ;;
+  esac
+}
+
+parse_document_options() {
+  if [ "$#" -lt 1 ]; then
+    usage >&2
+    exit 2
+  fi
+
+  INPUT=$1
+  shift
+  OUT_DIR=
+  ROUTE=
+  READER=
+  REVIEWS=
+  LLM_CMD=
+  KATEX_CMD=
+  TIMEOUT=
+  MAX_BYTES=
+
+  while [ "$#" -gt 0 ]; do
+    case "$1" in
+      -o|--out)
+        need_arg "$@"
+        OUT_DIR=$2
+        shift 2
+        ;;
+      --route)
+        need_arg "$@"
+        ROUTE=$2
+        shift 2
+        ;;
+      --reader)
+        need_arg "$@"
+        READER=$2
+        shift 2
+        ;;
+      --reviews)
+        need_arg "$@"
+        REVIEWS=$2
+        shift 2
+        ;;
+      --llm-cmd)
+        need_arg "$@"
+        LLM_CMD=$2
+        shift 2
+        ;;
+      --katex-cmd)
+        need_arg "$@"
+        KATEX_CMD=$2
+        shift 2
+        ;;
+      --timeout)
+        need_arg "$@"
+        TIMEOUT=$2
+        shift 2
+        ;;
+      --max-bytes)
+        need_arg "$@"
+        MAX_BYTES=$2
+        shift 2
+        ;;
+      -h|--help)
+        usage
+        exit 0
+        ;;
+      *)
+        printf 'prosemap: unknown option: %s\n' "$1" >&2
+        exit 2
+        ;;
+    esac
+  done
+
+  if [ ! -f "$INPUT" ]; then
+    printf 'prosemap: input file not found: %s\n' "$INPUT" >&2
+    exit 2
+  fi
+}
+
+export_optional() {
+  [ -z "$ROUTE" ] || export PROSEMAP_ROUTE=$ROUTE
+  [ -z "$READER" ] || export PROSEMAP_READER=$READER
+  [ -z "$REVIEWS" ] || export PROSEMAP_REVIEWS=$REVIEWS
+  [ -z "$LLM_CMD" ] || export PROSEMAP_LLM_CMD=$LLM_CMD
+  [ -z "$KATEX_CMD" ] || export PROSEMAP_KATEX_CMD=$KATEX_CMD
+  [ -z "$TIMEOUT" ] || export PROSEMAP_LLM_TIMEOUT=$TIMEOUT
+  [ -z "$MAX_BYTES" ] || export PROSEMAP_LLM_MAX_BYTES=$MAX_BYTES
+}
+
+analyze() {
+  parse_document_options "$@"
+  if [ -z "$OUT_DIR" ]; then
+    name=$(basename "$INPUT")
+    stem=${name%.*}
+    OUT_DIR=".prosemap/$stem"
+  fi
+  mkdir -p "$OUT_DIR"
+
+  export PROSEMAP_INPUT=$INPUT
+  export PROSEMAP_OUTPUT="$OUT_DIR/report.md"
+  export PROSEMAP_JSONL="$OUT_DIR/findings.jsonl"
+  export PROSEMAP_MANIFEST="$OUT_DIR/manifest.json"
+  export PROSEMAP_COMPLETE="$OUT_DIR/manifest.json.complete"
+  unset PROSEMAP_CMD
+  export_optional
+
+  "$BEND" "$MAIN"
+  status=$?
+  if [ "$status" -eq 0 ]; then
+    printf '\nArtifacts: %s\n' "$OUT_DIR" >&2
+  fi
+  return "$status"
+}
+
+context() {
+  parse_document_options "$@"
+  if [ -z "$LLM_CMD" ]; then
+    printf '%s\n' 'prosemap: context requires --llm-cmd COMMAND' >&2
+    exit 2
+  fi
+  export PROSEMAP_CMD=context
+  export PROSEMAP_INPUT=$INPUT
+  export_optional
+  "$BEND" "$MAIN"
+}
+
+latex() {
+  parse_document_options "$@"
+  if [ -z "$KATEX_CMD" ]; then
+    printf '%s\n' 'prosemap: latex requires --katex-cmd COMMAND' >&2
+    exit 2
+  fi
+  export PROSEMAP_CMD=latex
+  export PROSEMAP_INPUT=$INPUT
+  export_optional
+  "$BEND" "$MAIN"
+}
+
+if [ "$#" -eq 0 ]; then
+  usage >&2
+  exit 2
+fi
+
+command=$1
+case "$command" in
+  help|-h|--help)
+    usage
+    ;;
+  analyze)
+    shift
+    analyze "$@"
+    ;;
+  context)
+    shift
+    context "$@"
+    ;;
+  latex)
+    shift
+    latex "$@"
+    ;;
+  gate)
+    shift
+    if [ "$#" -ne 2 ] && [ "$#" -ne 4 ]; then
+      usage >&2
+      exit 2
+    fi
+    export PROSEMAP_CMD=gate
+    export PROSEMAP_BASE=$1
+    export PROSEMAP_CANDIDATE=$2
+    if [ "$#" -eq 4 ]; then
+      export PROSEMAP_BASE_SOURCE=$3
+      export PROSEMAP_CANDIDATE_SOURCE=$4
+    fi
+    run_status 'GATE PASS'
+    ;;
+  evaluate)
+    shift
+    if [ "$#" -ne 2 ]; then
+      usage >&2
+      exit 2
+    fi
+    export PROSEMAP_CMD=evaluate
+    export PROSEMAP_BASE_RUN=$1
+    export PROSEMAP_CANDIDATE_RUN=$2
+    run_status 'EVALUATE PASS'
+    ;;
+  corpus)
+    shift
+    if [ "$#" -gt 1 ]; then
+      usage >&2
+      exit 2
+    fi
+    export PROSEMAP_CMD=corpus
+    export PROSEMAP_CORPUS_DIR=${1:-$ROOT/fixtures/corpus}
+    run_status 'CORPUS PASS'
+    ;;
+  label-evaluate)
+    shift
+    if [ "$#" -ne 1 ]; then
+      usage >&2
+      exit 2
+    fi
+    export PROSEMAP_CMD=label-evaluate
+    export PROSEMAP_LABEL_DIR=$1
+    run_status 'LABEL EVALUATE PASS'
+    ;;
+  review-evaluate)
+    shift
+    if [ "$#" -ne 2 ]; then
+      usage >&2
+      exit 2
+    fi
+    export PROSEMAP_CMD=review-evaluate
+    export PROSEMAP_FINDINGS=$1
+    export PROSEMAP_REVIEWS=$2
+    run_status 'REVIEW EVALUATE PASS'
+    ;;
+  -* )
+    printf 'prosemap: unknown command: %s\n' "$command" >&2
+    usage >&2
+    exit 2
+    ;;
+  *)
+    analyze "$@"
+    ;;
+esac
