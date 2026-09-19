@@ -45,6 +45,9 @@ def main() -> IO(Unit):
   # authored id (so `#methods` resolves); `{#}` names nothing and keeps the
   # offset anchor.
   +slugs = {"# Intro {#intro}\n\nSee [methods](#methods) and [ghost](#missing).\n\n## Methods {#methods}\n\nBody text goes here.\n\n## Bare {#}\n\nAfter the empty anchor.\n" : String}
+  # Source-level terminology: explicit <dfn> and Markdown **strong** markers
+  # become sibling term blocks while the containing prose blocks remain.
+  +terms = {"# Terms {#terms}\n\nA <dfn>Functor</dfn> is explicit.\n\nA **Monad** is bold.\n\nAn **Applicative** is bold.\n" : String}
   blocks = Md.Md.parse(src, "docsha123")
   +slug_blocks = Md.Md.parse(slugs, "docsha123")
   do IO<Unit>:
@@ -56,3 +59,7 @@ def main() -> IO(Unit):
     IO.print(show_anchors(slug_blocks))
     IO.print("slug findings:")
     IO.print(show_findings(M.Mech.analyze(4, slug_blocks)))
+    IO.print("term blocks:")
+    IO.print(show_blocks(Md.Md.parse(terms, "docsha123")))
+    IO.print("term findings:")
+    IO.print(show_findings(M.Mech.analyze(4, Md.Md.parse(terms, "docsha123"))))

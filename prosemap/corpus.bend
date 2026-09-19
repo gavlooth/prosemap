@@ -254,7 +254,7 @@ def Cp.report_if(clean: Bool, +os: List<&2, Observation>, errors: String) -> Str
       "cases: " ++ Nat.show(List.length(&2, Observation, os)) ++ " (all source hashes verified)\n" ++
       Cp.issues(os) ++ "rule\thit\textra\tmiss\tprecision\trecall\n" ++ Cp.rows(Cp.rules(), os) ++
       "TOTAL\t" ++ Cp.score_text(Cp.total(Cp.rules(), os)) ++ "\n" ++
-      "Terminology positive coverage: unsupported by the Markdown extractor.\n" ++
+      "Positive source-level coverage: all 12 mechanical rules.\n" ++
       Cp.verdict(Cp.total(Cp.rules(), os))
 
 def Cp.report(run: Run) -> String:

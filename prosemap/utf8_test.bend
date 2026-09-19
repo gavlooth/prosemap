@@ -28,6 +28,7 @@ def block_spans(bs: List<&2, T.Block>) -> String:
 
 def main() -> IO(Unit):
   +src = {"# é\n\nπ\n" : String}
+  +term_src = {"π before <dfn>Functor</dfn> after.\n" : String}
   do IO<Unit>:
     # a (1) + € (3) + 𝄞 (4) UTF-8 bytes
     IO.print("byte-length = " ++ Nat.show(U32.to_nat(Utf8.Utf8.byte_length("a€𝄞"))))
@@ -38,3 +39,7 @@ def main() -> IO(Unit):
     IO.print("sha-mixed = " ++ S.Sha256.hex("a€𝄞"))
     # Heading and paragraph ranges are 0-4 and 6-8, respectively.
     IO.print(block_spans(Md.Md.parse(src, S.Sha256.hex(src))))
+    # The extracted inline definition starts after the two-byte π prefix; its
+    # evidence range still slices exactly to the term text.
+    IO.print("term spans:")
+    IO.print(block_spans(Md.Md.parse(term_src, S.Sha256.hex(term_src))))

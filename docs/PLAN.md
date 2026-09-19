@@ -84,32 +84,42 @@ Replay strengthens stored-artifact trust. With both selected Markdown sources su
 - Provider-neutral contextual subprocess integration with evidence-verified candidate admission and reviews.
 - Seven machine-checked laws in `LAWS.bend` discharged by `PROOF.bend`.
 
-### Completed: synthetic Markdown emission regression
+### Completed: source-level regression and evaluation workflows
 
 The frozen `fixtures/corpus` suite validates document hashes, routes, and the
-complete expected mechanical-rule emission set. Nine cases positively exercise
-ten rule families and include route and clean controls. The two terminology
-rules remain unassessed because the Markdown extractor does not produce their
-term block tags. These implementation-authored labels test deterministic
-regression behavior; they are not independent defect judgments.
+complete expected mechanical-rule emission set. Twelve cases positively
+exercise all twelve rule families and include terminology, Unicode,
+malformed-delimiter, route, code-fence, and clean controls. These
+implementation-authored labels test deterministic regression behavior; they are
+not independent defect judgments.
 
-### Next: independent content evaluation
+Markdown extraction now emits source-mapped `<dfn>` and `**strong**` term blocks
+without removing their containing prose. The malformed inline/display-math
+delimiter boundary no longer lets an inline `$` consume half of a later `$$`
+opener.
 
-Obtain independently reviewed Markdown labels before assessing false positives,
-misses, or rule usefulness. Define the supported Markdown and Unicode
-boundaries, keep neutral observations distinct from defects, and do not tune on
-held-out documents. Extend the extractor first if terminology rules need
-positive source-level evaluation.
+`label-evaluate` provides hash-verified, fail-closed scoring for externally
+adjudicated defect/neutral/absent rule labels. `review-evaluate` validates
+two-reviewer coverage, consensus, disagreement, orphans, and duplicate review
+rows for contextual findings. The preserved three-run non-human contextual
+pilot reached 3/3 review coverage, with two consensus acceptances and one
+consensus rejection for a rationale that exceeded its cited evidence.
 
-The contextual stage now parses provider-neutral subprocess candidates,
-re-verifies cited source evidence, applies reviews, and merges admitted
-candidates into artifacts. Its next step is an independent reviewer study of
-citation accuracy, agreement, repeatability, cost, and abstention behavior—not
-additional transport-specific scaffolding.
+### Remaining: external empirical evidence
 
-### Deferred: reader-outcome evidence
+Repository work for ingesting and scoring the planned studies is complete.
+Real-document mechanical accuracy still requires independent reviewers to
+create and adjudicate a hash-frozen `labels.tsv` without seeing analyzer output.
+A production contextual study still requires a selected provider,
+representative documents, human reviewers, and measured latency/token/monetary
+cost. Neither can be replaced with implementation-authored or agent-reviewed
+fixtures.
 
-Claims about improved comprehension require independently designed reader studies or similarly direct outcome evidence. Mechanical counts, lexical overlap, model agreement, and source-level regression detection are not substitutes for that evidence.
+Claims about improved comprehension additionally require independently designed
+reader studies or similarly direct outcome evidence. The study must recruit the
+intended readers, randomize original/revised passages, and measure objective
+comprehension plus time and confidence. Participants, consent/ethics, and
+outcome data are external prerequisites, not repository implementation tasks.
 
 ## 7. Acceptance discipline
 

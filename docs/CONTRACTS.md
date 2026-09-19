@@ -18,13 +18,13 @@ A `Block` has:
 | --- | --- |
 | `blockId` | Extractor-assigned block identifier. |
 | `kind` | One of heading, prose, preformatted, math, table, figure, definition, or other. |
-| `tagName` | The block's source-adapter tag label. The Markdown adapter uses labels such as `h1`, `p`, `pre`, and `math`. |
+| `tagName` | The block's source-adapter tag label. The Markdown adapter uses labels such as `h1`, `p`, `pre`, `math`, `strong`, and `dfn`. |
 | `sectionAnchor` | Extractor-assigned section anchor. A Markdown heading opens `sec-<byte-offset>`, or its authored `{#slug}` when the heading line carries one (`## Methods {#methods}` → `methods`); the initial section is `root`. |
 | `authoredId`, `headingLevel`, `ancestorSections` | `authoredId` is the heading's `{#slug}` when present, otherwise absent; the rest is optional source-structure metadata retained by the core type. |
 | `text`, `mapped` | Extracted text and whether the block is source mapped. |
 | `evidence`, `links`, `tex` | The exact supporting evidence, internal-link records, and TeX records attached to the block. |
 
-The Markdown adapter creates a flat block list. It recognizes ATX headings, blank-line-separated paragraphs, fenced code, fenced `math`, inline `$...$`, display `$$...$$`, and fragment links of the form `[text](#fragment)`. A heading may carry an authored anchor `{#slug}`: the slug becomes the heading's section anchor and authored ID, so `[text](#slug)` resolves, and the marker is stripped from the heading text. `{#}` names nothing and leaves the offset anchor in place. The adapter does not claim to preserve arbitrary Markdown or other document formats as a full document model.
+The Markdown adapter creates a flat block list. It recognizes ATX headings, blank-line-separated paragraphs, fenced code, fenced `math`, inline `$...$`, display `$$...$$`, fragment links of the form `[text](#fragment)`, Markdown strong terms `**term**`, and explicit inline definitions `<dfn>term</dfn>`. Inline terms become additional source-mapped sibling blocks while their containing paragraph remains intact. Term syntax inside fenced code and unclosed term markers do not create term blocks. `$$` is always treated as a display delimiter and cannot be consumed as the close of an earlier inline `$`. A heading may carry an authored anchor `{#slug}`: the slug becomes the heading's section anchor and authored ID, so `[text](#slug)` resolves, and the marker is stripped from the heading text. `{#}` names nothing and leaves the offset anchor in place. The adapter does not claim to preserve arbitrary Markdown or other document formats as a full document model.
 
 A `Link` records `href`, optional decoded fragment and target ID, and its evidence ID. A `Tex` record holds raw TeX, whether it is display math, whether it is recognized, and the evidence ID of its enclosing block.
 

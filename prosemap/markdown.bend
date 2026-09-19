@@ -263,12 +263,28 @@ def Md.tex_scan_step(dollar: Bool, +tail: String) -> TexStep:
     case True{}:
       Md.tex_scan_dollar(tail)
 
+def Md.tex_inline_pair(double: Bool, d: Char, more: String, buf: String) -> TexStep:
+  match double:
+    case True{}:
+      # `$$` is always a display delimiter. Abandon the preceding unclosed
+      # inline token rather than consuming half of the display opener.
+      TexNext{more, TexDisplay{""}}
+    case False{}:
+      TexEmit{buf, False{}, SCon{d, more}, TexScan{}}
+
+def Md.tex_inline_dollar(+tail: String, +buf: String) -> TexStep:
+  match tail:
+    case SNil{}:
+      TexEmit{buf, False{}, "", TexScan{}}
+    case SCon{d, +more}:
+      Md.tex_inline_pair(Md.is_dollar(d), d, more, buf)
+
 def Md.tex_inline_step(dollar: Bool, +c: Char, +tail: String, +buf: String) -> TexStep:
   match dollar:
     case False{}:
       TexNext{tail, TexInline{buf ++ SCon{c, SNil{}}}}
     case True{}:
-      TexEmit{buf, False{}, tail, TexScan{}}
+      Md.tex_inline_dollar(tail, buf)
 
 def Md.tex_display_dollar(double: Bool, +d: Char, +more: String, +buf: String) -> TexStep:
   match double:
@@ -336,6 +352,104 @@ def Md.block(+tag: String, kind: T.BlockKind, evk: T.EvidenceKind, level: Maybe<
   T.Block{"blk-" ++ sid, kind, tag, sec, authored, level, [], text, True{}, [ev], links, []}
 def Md.inline_block(+tag: String, kind: T.BlockKind, evk: T.EvidenceKind, level: Maybe<&2, U32>, +start: U32, end: U32, +text: String, +sec: String, +authored: Maybe<&2, String>, docsha: String, +src: String) -> T.Block:
   Md.add_tex(Md.block(tag, kind, evk, level, start, end, text, sec, authored, docsha, src), Md.tex(text, Md.eid(start)))
+
+# ---------------------------------------------------------------------------
+# Inline terminology extraction
+# ---------------------------------------------------------------------------
+# The supported source forms are Markdown strong emphasis (`**term**`) and the
+# explicit inline HTML definition element (`<dfn>term</dfn>`). Each extracted
+# term is an additional source-mapped block; the containing paragraph remains
+# intact so prose-word denominators and ordinary inline analysis are unchanged.
+type TermSt is Data:
+  TermScan{}
+  TermBody{rev: String, start: U32}
+
+type TermStep is Data:
+  TermDone{}
+  TermNext{rest: String, offset: U32, st: TermSt}
+  TermEmit{text: String, start: U32, end: U32, rest: String, offset: U32, st: TermSt}
+
+type TermHit is Data:
+  TermHit{text: String, start: U32, end: U32}
+
+def Md.char_bytes(c: Char) -> U32:
+  Utf8.Utf8.byte_length(String.from_list([c]))
+
+def Md.term_scan_pick(found: Bool, +s: String, +offset: U32, +open: String) -> TermStep:
+  match found:
+    case True{}:
+      +body = String.drop(s, String.length(open))
+      +next = U32.add(offset, Utf8.Utf8.byte_length(open))
+      TermNext{body, next, TermBody{"", next}}
+    case False{}:
+      match s:
+        case SNil{}:
+          TermDone{}
+        case SCon{c, rest}:
+          TermNext{rest, U32.add(offset, Md.char_bytes(c)), TermScan{}}
+
+def Md.term_body_pick(found: Bool, +s: String, +offset: U32, +close: String, rev: String, start: U32) -> TermStep:
+  match found:
+    case True{}:
+      TermEmit{
+        String.reverse(rev), start, offset,
+        String.drop(s, String.length(close)),
+        U32.add(offset, Utf8.Utf8.byte_length(close)),
+        TermScan{},
+      }
+    case False{}:
+      match s:
+        case SNil{}:
+          TermDone{}
+        case SCon{c, rest}:
+          TermNext{rest, U32.add(offset, Md.char_bytes(c)), TermBody{SCon{c, rev}, start}}
+
+def Md.term_step(+s: String, st: TermSt, +offset: U32, +open: String, +close: String) -> TermStep:
+  match st:
+    case TermScan{}:
+      Md.term_scan_pick(String.starts_with(s, open), s, offset, open)
+    case TermBody{rev, start}:
+      Md.term_body_pick(String.starts_with(s, close), s, offset, close, rev, start)
+
+def Md.term_hit_put(nonempty: Bool, text: String, start: U32, end: U32, rest: List<&2, TermHit>) -> List<&2, TermHit>:
+  match nonempty:
+    case False{}:
+      rest
+    case True{}:
+      TermHit{text, start, end} <> rest
+
+def Md.term_apply(fuel: Nat, step: TermStep, +open: String, +close: String) -> List<&2, TermHit>:
+  match fuel:
+    case 0n:
+      Nil{}
+    case 1n+p:
+      match step:
+        case TermDone{}:
+          Nil{}
+        case TermNext{rest, offset, st}:
+          Md.term_apply(p, Md.term_step(rest, st, offset, open, close), open, close)
+        case TermEmit{+text, start, end, rest, offset, st}:
+          Md.term_hit_put(
+            Bool.not(String.is_empty(Md.trim(text))), text, start, end,
+            Md.term_apply(p, Md.term_step(rest, st, offset, open, close), open, close))
+
+def Md.term_blocks(hits: List<&2, TermHit>, +tag: String, +kind: T.BlockKind, +evk: T.EvidenceKind, +sec: String, +docsha: String, +src: String) -> List<&2, T.Block>:
+  match hits:
+    case Nil{}:
+      Nil{}
+    case Con{TermHit{text, start, end}, t}:
+      Md.block(tag, kind, evk, None{}, start, end, text, sec, None{}, docsha, src) <>
+        Md.term_blocks(t, tag, kind, evk, sec, docsha, src)
+
+def Md.terms_of(+text: String, +start: U32, +sec: String, +docsha: String, +src: String) -> List<&2, T.Block>:
+  List.append(
+    &2, T.Block,
+    Md.term_blocks(
+      Md.term_apply(1n+String.length(text), Md.term_step(text, TermScan{}, start, "<dfn>", "</dfn>"), "<dfn>", "</dfn>"),
+      "dfn", T.BkDefinition{}, T.EvDefinition{}, sec, docsha, src),
+    Md.term_blocks(
+      Md.term_apply(1n+String.length(text), Md.term_step(text, TermScan{}, start, "**", "**"), "**", "**"),
+      "strong", T.BkOther{}, T.EvProse{}, sec, docsha, src))
 
 
 def Md.htag(h: Nat) -> String:
@@ -419,8 +533,9 @@ def Md.heading_block(+line: String, +offset: U32, len: U32, +sec: String, docsha
   +h = Md.hcount(line)
   [ Md.inline_block(Md.htag(h), T.BkHeading{}, T.EvHeading{}, Some{U32.from_nat(h)}, offset, U32.add(offset, len), Md.strip_slug(Md.trim(String.drop(line, h))), sec, Md.line_slug(line), docsha, src) ]
 
-def Md.para_block(buf: String, +start: U32, pend: U32, +sec: String, docsha: String, +src: String) -> List<&2, T.Block>:
-  [ Md.inline_block("p", T.BkProse{}, T.EvProse{}, None{}, start, pend, buf, sec, None{}, docsha, src) ]
+def Md.para_block(+buf: String, +start: U32, pend: U32, +sec: String, +docsha: String, +src: String) -> List<&2, T.Block>:
+  Md.inline_block("p", T.BkProse{}, T.EvProse{}, None{}, start, pend, buf, sec, None{}, docsha, src) <>
+    Md.terms_of(buf, start, sec, docsha, src)
 
 def Md.code_block(buf: String, +start: U32, cend: U32, +sec: String, docsha: String, +src: String) -> List<&2, T.Block>:
   [ Md.block("pre", T.BkPre{}, T.EvSourcePattern{}, None{}, start, cend, buf, sec, None{}, docsha, src) ]

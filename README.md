@@ -52,6 +52,14 @@ PROSEMAP_CMD=evaluate PROSEMAP_BASE_RUN=.runs/base PROSEMAP_CANDIDATE_RUN=.runs/
 # frozen synthetic rule-emission regression
 PROSEMAP_CMD=corpus bend prosemap/main.bend
 # -> per-rule exact counts followed by CORPUS PASS/FAIL
+
+# adjudicated mechanical labels (labels.tsv + Markdown files)
+PROSEMAP_CMD=label-evaluate PROSEMAP_LABEL_DIR=/path/to/adjudicated-corpus \
+  bend prosemap/main.bend
+
+# contextual findings reviewed by at least two distinct reviewer IDs
+PROSEMAP_CMD=review-evaluate PROSEMAP_FINDINGS=findings.jsonl \
+  PROSEMAP_REVIEWS=reviews.jsonl bend prosemap/main.bend
 ```
 
 | Command | Environment | Output |
@@ -62,6 +70,8 @@ PROSEMAP_CMD=corpus bend prosemap/main.bend
 | `context` | `PROSEMAP_INPUT`, `PROSEMAP_LLM_CMD` (unset ⇒ skipped), `PROSEMAP_LLM_TIMEOUT` (ms, def 60000), `PROSEMAP_LLM_MAX_BYTES` (def 1 MiB) | evidence-verified candidate lines |
 | `latex` | `PROSEMAP_INPUT`, `PROSEMAP_KATEX_CMD` (unset ⇒ skipped) | `formula.unparsable` findings for unparsable math |
 | `corpus` | optional `PROSEMAP_CORPUS_DIR` (default `fixtures/corpus`) | hash-verified per-rule emission matrix and `CORPUS PASS/FAIL` |
+| `label-evaluate` | required `PROSEMAP_LABEL_DIR` containing `labels.tsv` and its Markdown files | hash-verified TP/FP/FN/neutral matrix and `LABEL EVALUATE PASS/FAIL` |
+| `review-evaluate` | `PROSEMAP_FINDINGS`, `PROSEMAP_REVIEWS` | contextual-review coverage, consensus/disagreement, integrity checks, and `REVIEW EVALUATE PASS/FAIL` |
 
 **FFI shim.** A single generic subprocess effect (`prosemap/effs/exec.js`, `Exec.run`) lets Bend
 shell out to external tools; it powers `latex` (a real KaTeX/TeX parser), `context` (any LLM CLI —
@@ -71,6 +81,18 @@ and is the pattern for pandoc-based ingestion. A failed tool probe abstains rath
 **Reviews.** `PROSEMAP_REVIEWS=reviews.jsonl` applies human dispositions during `analyze`; a line
 `{"findingRecordId":..,"disposition":"rejected|accepted|needs-context","rationale":..}` with
 `rejected` suppresses that finding from every artifact (and hence from the gate).
+
+`label-evaluate` expects five tab-separated fields per case:
+`document`, `sha256`, `route`, `defect-rules`, `neutral-rules`; `-` means an
+empty route or rule set, and every unlisted rule is labeled absent. The command
+can calculate exact rule-level precision and recall, but reviewer independence
+and adjudication provenance are study inputs, not facts the executable can
+prove.
+
+`review-evaluate` requires at least two distinct reviewer IDs for every
+`contextual.model@1` finding and fails on missing coverage, malformed rows,
+orphan reviews, or duplicate reviewer/finding pairs. Disagreement is reported
+as a study result rather than silently resolved.
 
 **Reader profile and reading route.** `PROSEMAP_READER=<file>` embeds the reader's declared
 context (assumed knowledge, what is not assumed, objective) in the contextual prompt, so
@@ -110,7 +132,7 @@ rename-atomic. The manifest's `sourceSha256` matches `sha256sum` of the input.
 | `contracts.bend` | evidence integrity (`Str.slice`, `Evidence.mk`, `integrity`) |
 | `utf8.bend` | Unicode scalar → UTF-8 encoding, byte length, byte-boundary slicing |
 | `sha256.bend` | pure SHA-256 over UTF-8 bytes (vector-verified) |
-| `markdown.bend` | Markdown → `Block` list with UTF-8 byte offsets, `{#slug}`/offset section anchors, links, math/TeX |
+| `markdown.bend` | Markdown → `Block` list with UTF-8 byte offsets, `{#slug}`/offset section anchors, links, math/TeX, `**strong**`, and `<dfn>` terms |
 | `mechanical.bend` | all 12 deterministic rules, including the command-aware TeX tokenizer |
 | `cohesion.bend` | Jaccard / multiset-Dice as exact rationals |
 | `route.bend` | reading-route scoping: keep only blocks whose section anchor is on the route |
@@ -119,13 +141,15 @@ rename-atomic. The manifest's `sourceSha256` matches `sha256sum` of the input.
 | `gate.bend` | CI gate over newly added allowlisted observations, plus replay verification |
 | `evaluation.bend` | comparison + replay-verified gate over two runs |
 | `corpus.bend` | frozen Markdown corpus validation, exact emission scoring, and fail-closed input checks |
+| `label_eval.bend` | adjudicated defect/neutral/absent labels → exact rule-level TP/FP/FN |
+| `review_eval.bend` | independent contextual-review coverage, consensus, disagreement, and integrity checks |
 | `exec.bend` | the subprocess FFI shim (`effs/exec.js`) used by the `latex` and `context` stages |
 | `latex.bend` | TeX snippets extracted from blocks → `formula.unparsable` findings via `PROSEMAP_KATEX_CMD` |
 | `contextual.bend` | contextual requests, provider-neutral candidate parsing, and evidence re-verification |
 | `json.bend` / `json_read.bend` | deterministic JSON emit / targeted findings reader |
 | `report.bend` | findings → Markdown report |
 | `artifacts.bend` | artifact commit protocol (write artifacts, then the marker) |
-| `main.bend` | env-driven entry point: `analyze`, `gate`, `context`, `evaluate`, `latex`, `corpus` |
+| `main.bend` | env-driven entry point for analysis, comparison, corpus, label, and review commands |
 
 ## Laws
 
@@ -165,7 +189,12 @@ bend prosemap/cmp2_test.bend          # comparison grouping
 bend prosemap/ctx_test.bend           # contextual evidence re-verification
 bend prosemap/i3_test.bend            # rule-ID / finding construction
 bend prosemap/jr_test.bend            # findings.jsonl reader
+bend prosemap/study_test.bend         # adjudicated labels + independent reviews
 PROSEMAP_CMD=corpus bend prosemap/main.bend # frozen Markdown emission regression
+PROSEMAP_CMD=review-evaluate \
+  PROSEMAP_FINDINGS=fixtures/contextual-pilot/findings.jsonl \
+  PROSEMAP_REVIEWS=fixtures/contextual-pilot/reviews.jsonl \
+  bend prosemap/main.bend             # preserved non-human pilot replay
 ```
 
 ## Design

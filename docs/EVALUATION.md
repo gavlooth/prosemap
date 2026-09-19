@@ -1,8 +1,18 @@
 # Evaluation status
 
-Prosemap now has two distinct evidence layers: executable implementation checks
-and a frozen synthetic Markdown emission regression. Neither layer is an
-independently annotated writing-defect study or evidence of comprehension gains.
+Prosemap has four deliberately separate evidence layers:
+
+1. executable implementation checks and seven machine-checked laws;
+2. a frozen synthetic Markdown emission regression;
+3. evaluators for externally adjudicated mechanical labels and independently
+   reviewed contextual findings; and
+4. a small, preserved non-human contextual pilot.
+
+The first three are implemented and behaviorally verified. Layer 3 still needs
+external adjudicated inputs before it can produce empirical accuracy results.
+The repository contains no independent human defect corpus or reader-outcome
+study, so it does not support claims of real-world defect accuracy or improved
+comprehension.
 
 ## Frozen Markdown emission regression
 
@@ -13,57 +23,95 @@ IDs. The evaluator rejects malformed rows, unknown rule IDs, duplicate
 document/route keys, unsafe filenames, missing documents, and hash mismatches.
 Any missing or unexpected rule emission fails the run.
 
-The current corpus has nine document/route cases. It positively exercises ten
-of the twelve mechanical rules:
+The current corpus has twelve document/route cases and positively exercises all
+twelve mechanical rules:
 
 | Rule coverage | Cases |
 | --- | --- |
 | Heading depth and transition | deep heading jump |
 | Duplicate authored ID | repeated `{#same}` |
 | Expanded duplicate prose | whitespace-normalized repeated paragraph |
-| Unresolved and resolved route edges | whole-document and `intro`-only routes |
+| Unresolved and resolved route edges | whole-document, `intro`-only, and Unicode-anchor routes |
 | Case-similar notation | `$x$` and `$X$` in one section |
-| ARI eligibility | paragraph above the configured word/sentence thresholds |
+| ARI eligibility | paragraph above configured word/sentence thresholds |
+| Definition and introduction density | `<dfn>` plus two `**strong**` terms after a multibyte prefix |
 | Escaped pipes and ASCII diagram | prose source pattern plus fenced diagram |
+| Boundary controls | unclosed strong/definition/math delimiters and term syntax inside code |
 | Clean control | no expected emissions |
 
-The passing frozen result is 11 expected emissions, 0 unexpected emissions, and
+The passing frozen result is 14 expected emissions, 0 unexpected emissions, and
 0 missing emissions. Exact per-rule precision/recall is shown for regression
-convenience, but it measures agreement with synthetic emission expectations,
-not real-world defect accuracy.
+convenience, but it measures agreement with implementation-authored emission
+expectations, not real-world defect accuracy.
 
-`terminology.definition` and `terminology.introduction-density` remain
-unassessed in this corpus: the Markdown extractor does not emit `dfn`, `strong`,
-or `b` blocks. Their lower-level mechanical behavior remains smoke-tested, but
-claiming positive Markdown corpus coverage would be false.
+## Adjudicated mechanical labels
+
+`PROSEMAP_CMD=label-evaluate` reads a required `PROSEMAP_LABEL_DIR`. Its
+`labels.tsv` rows contain document, SHA-256, route, defect-rule set, and
+neutral-rule set; every unlisted rule is labeled absent. The evaluator verifies
+hashes and schema, distinguishes neutral observations from defects, and reports
+per-rule and total TP/FP/FN, neutral counts, exact precision, and exact recall.
+Malformed, duplicate, unknown-rule, missing-file, and hash-mismatch inputs fail
+closed.
+
+This completes the reproducible evaluation workflow, not the empirical study.
+Reviewer independence, label provenance, and adjudication are externally
+asserted inputs. No bundled label set is called independent.
+
+## Contextual review pilot
+
+`PROSEMAP_CMD=review-evaluate` filters `contextual.model@1` findings and
+requires at least two distinct reviewer IDs per finding. It reports consensus
+accepted, rejected, needs-context, and disagreement counts, and fails on
+malformed rows, orphan reviews, duplicate reviewer/finding pairs, or incomplete
+review coverage.
+
+`fixtures/contextual-pilot` preserves a three-run pilot on
+`fixtures/md/sample.md`. Three `smol` model calls independently targeted the
+same evidence (`ev-126`) and the same broad missing-context problem; two used
+the same candidate kind. Two independently run clarity-reader agents agreed on
+all three dispositions: two accepted and one rejected. The rejected candidate
+overreached beyond its cited evidence by claiming that surrounding text and a
+diagram lacked context. The saved evaluator result is coverage 3/3, consensus
+accepted 2, consensus rejected 1, conflicts 0.
+
+This pilot demonstrates admission, repeat generation, evidence-sensitive
+review, and evaluator replay. It is one synthetic document, uses agent rather
+than human reviewers, and records no monetary cost or reader outcome; it is not
+a provider-quality estimate.
 
 ## Executable smoke and formal coverage
 
-Standalone Bend programs under `prosemap/` exercise UTF-8 evidence integrity,
-SHA-256 vectors, Markdown/math extraction, the mechanical rules, comparison,
-replay gating, JSONL reconstruction, contextual evidence admission, subprocess
-execution, and authored heading anchors. `bend PROOF.bend` checks seven stated
-laws covering evidence construction/integrity, unassessed zero-denominator
-metrics, conservative comparison and gate behavior, and finding-ID prefixes.
+Standalone Bend programs exercise UTF-8 evidence integrity, SHA-256 vectors,
+Markdown/math/term extraction, all mechanical rules, comparison, replay gating,
+JSONL reconstruction, contextual admission, subprocess execution, adjudicated
+label scoring, and independent-review scoring. `bend PROOF.bend` checks seven
+stated laws covering evidence construction/integrity, unassessed
+zero-denominator metrics, conservative comparison and gate behavior, and
+finding-ID prefixes.
 
-These checks establish deterministic implementation behavior only. They do not
-prove extractor completeness, pedagogical usefulness, or provider judgment
-quality.
+## External evidence still required
 
-## Contextual boundary
+### Independent defect corpus
 
-The provider-neutral subprocess stage accepts candidate records only when their
-cited evidence IDs re-verify against the prepared source evidence. Reviews can
-then reject accepted candidates before artifact emission. This path is
-implemented and smoke-exercised; no live-provider accuracy, repeatability, cost,
-or reviewer-agreement result is claimed.
+Independent reviewers must label real Markdown documents without seeing
+Prosemap output, reconcile disagreements through a recorded adjudication
+process, freeze document hashes, and supply the resulting `labels.tsv`. Keep a
+held-out split that is never used for rule tuning. Until that input exists,
+real-document precision, recall, and usefulness remain unmeasured.
 
-## Remaining validation work
+### Human contextual study
 
-- obtain independently reviewed Markdown labels before reporting defect
-  precision, recall, or rule usefulness;
-- extend Markdown extraction if terminology rules should receive positive
-  source-level corpus coverage;
-- broaden Unicode and supported-Markdown boundary cases;
-- evaluate contextual candidates against independent reviewers; and
-- obtain direct reader-outcome evidence before making comprehension claims.
+Repeat the saved contextual protocol with a selected production provider,
+representative documents, human reviewers, recorded latency/token/monetary
+cost, and explicit abstention cases. The non-human pilot is implementation
+evidence only.
+
+### Reader outcomes
+
+Before claiming improved comprehension, recruit the intended reader population
+and preregister a blinded comparison of original versus revised passages.
+Randomize passage order, use objective comprehension questions plus completion
+time and confidence, record exclusions, and analyze both accuracy and time.
+Participants, consent/ethics requirements, study material, and outcome data are
+external prerequisites; no software-only substitute can complete this claim.

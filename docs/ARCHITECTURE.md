@@ -12,12 +12,17 @@ Bend has no argv interface, so `prosemap/main.bend` is configured entirely throu
 
 | `PROSEMAP_CMD` | Inputs | Result |
 | --- | --- | --- |
-| `analyze` (default) | `PROSEMAP_INPUT` (default `input.md`) | Deterministic analysis, artifacts, and a printed Markdown report. |
-| `gate` | `PROSEMAP_BASE` and `PROSEMAP_CANDIDATE` findings JSONL files | A gate result; optional source paths enable replay verification. |
-| `evaluate` | Explicit findings/source paths, or paired run directories | A replay-verified gate result and comparison-record count. |
-| `context` | `PROSEMAP_INPUT`, `PROSEMAP_PROVIDER_PORT` (default `8899`) | The body returned by a loopback contextual provider. |
+| `analyze` (default) | `PROSEMAP_INPUT` plus optional route, reader, reviews, and LLM command | Deterministic analysis, admitted contextual candidates, artifacts, and report. |
+| `gate` | `PROSEMAP_BASE` and `PROSEMAP_CANDIDATE` findings JSONL files | Gate result; optional source paths enable replay verification. |
+| `evaluate` | Explicit findings/source paths, or paired run directories | Replay-verified gate result and comparison-record count. |
+| `context` | `PROSEMAP_INPUT`, `PROSEMAP_LLM_CMD` | Evidence-verified contextual candidate lines; unset command skips. |
+| `latex` | `PROSEMAP_INPUT`, `PROSEMAP_KATEX_CMD` | Findings for snippets rejected by the configured TeX parser. |
+| `corpus` | optional `PROSEMAP_CORPUS_DIR` | Frozen synthetic emission regression. |
+| `label-evaluate` | required `PROSEMAP_LABEL_DIR` | Adjudicated defect/neutral/absent rule scoring. |
+| `review-evaluate` | findings and review JSONL paths | Contextual-review coverage and agreement report. |
 
-The commands print their result to stdout. `gate` prints `GATE PASS (n violation(s))` or `GATE FAIL (...)`; `evaluate` prints `EVALUATE PASS` or `EVALUATE FAIL` with its comparison-record count. There is **no Prosemap exit-code policy**: Bend reports nonzero only for runtime failures such as an unreadable input file, not for a printed PASS or FAIL.
+Commands print their result to stdout. There is no Prosemap exit-code policy:
+Bend reports nonzero only for runtime failures, not printed PASS or FAIL.
 
 ## Module boundaries
 
@@ -25,12 +30,13 @@ The commands print their result to stdout. `gate` prints `GATE PASS (n violation
 | --- | --- | --- |
 | `prosemap/types.bend` | Core algebraic data types for blocks, evidence, findings, metrics, and comparisons | Defines the in-memory records; it does not validate general JSON. |
 | `prosemap/utf8.bend`, `prosemap/sha256.bend`, `prosemap/contracts.bend` | UTF-8 byte operations, pure SHA-256, evidence construction and re-verification | Evidence spans are UTF-8 byte offsets and excerpts are re-sliced from source. |
-| `prosemap/markdown.bend` | Markdown extraction | Extracts ATX headings, paragraphs, fenced code, fenced `math`, inline/display TeX, and internal fragment links into flat blocks. It is not an HTML adapter. |
+| `prosemap/markdown.bend` | Markdown extraction | Extracts ATX headings, paragraphs, fenced code/math, inline/display TeX, internal links, `**strong**` terms, and `<dfn>` definitions into source-mapped blocks. |
 | `prosemap/mechanical.bend`, `prosemap/cohesion.bend` | Deterministic mechanical rules and lexical metric kernel | Findings are constructed from source evidence. Cohesion is an exact-token metric kernel, not a comprehension judgment. |
 | `prosemap/report.bend`, `prosemap/json.bend`, `prosemap/json_read.bend` | Markdown reporting and the compact findings JSONL interchange form | The reader recognizes the emitter's flat findings format; it is not a general JSON parser. |
-| `prosemap/comparison.bend`, `prosemap/gate.bend`, `prosemap/evaluation.bend` | Finding comparison, allowlisted gate, replay verification, evaluation flow | The gate only fails for newly added eligible mechanical observations. |
+| `prosemap/comparison.bend`, `prosemap/gate.bend`, `prosemap/evaluation.bend`, `prosemap/corpus.bend` | Finding comparison, replay verification, gating, and frozen regression | Synthetic emission agreement is kept distinct from adjudicated defect accuracy. |
+| `prosemap/label_eval.bend`, `prosemap/review_eval.bend` | Adjudicated rule scoring and contextual-review evaluation | Validate hashes, labels, reviewer coverage, orphans, duplicates, and disagreement; reviewer independence remains external provenance. |
 | `prosemap/artifacts.bend` | Artifact write ordering | Writes the completion marker last; Bend's file API supplies no atomic rename. |
-| `prosemap/contextual.bend` | Evidence re-verification and loopback request helper | The transport is plaintext loopback TCP/HTTP only; it has no DNS, TLS, or HTTPS. |
+| `prosemap/contextual.bend`, `prosemap/exec.bend` | Provider-neutral prompt/candidate boundary and bounded subprocess execution | Only candidates citing prepared evidence IDs are admitted; provider failure abstains. |
 | `prosemap/main.bend` | Environment dispatch and file I/O | Coordinates the commands above without adding a second execution model. |
 
 ## Analyze flow
@@ -55,11 +61,22 @@ The gate compares stored base and candidate findings. Its eligible rules are `re
 
 Supplying both `PROSEMAP_BASE_SOURCE` and `PROSEMAP_CANDIDATE_SOURCE` selects replay mode. It re-runs Markdown parsing and mechanical analysis for both sources, regenerates canonical JSONL, and requires exact string equality with each stored JSONL artifact. Missing one of the two replay sources or any disagreement fails closed. `evaluate` always uses this replay verification: it accepts either explicit base/candidate findings plus both sources, or `PROSEMAP_BASE_RUN` and `PROSEMAP_CANDIDATE_RUN` directories containing `input.md` and `findings.jsonl`.
 
-## Contextual boundary
+## Contextual and review boundary
 
-The `context` command connects only to `127.0.0.1` on `PROSEMAP_PROVIDER_PORT` (default `8899`) and issues a plaintext HTTP POST to `/contextual`. It prints the response body. There is no DNS lookup, TLS, HTTPS, provider SDK, credential handling, response-schema decoding, or artifact persistence in this command.
+`analyze` and `context` prepare source-verified evidence IDs and pass the prompt
+to `PROSEMAP_LLM_CMD` through the bounded subprocess effect. Candidate JSONL is
+accepted only when its `evidenceId` is in that prepared set. `analyze` converts
+accepted lines into advisory `contextual.model@1` findings, applies rejected
+review IDs, and writes the merged findings into ordinary artifacts.
 
-Separately, `Ctx.all_verified` is the admission predicate for evidence-backed candidates: every cited evidence item must reproduce the recorded source slice and document hash. The pure `Ctx.verify` helper drops evidence that fails that test. A raw provider response is therefore not, by itself, an accepted contextual finding.
+`review-evaluate` then checks whether every contextual finding has at least two
+distinct reviewer IDs. It reports consensus accepted/rejected/needs-context
+counts and disagreements, and fails on malformed, orphan, duplicate, or
+under-reviewed data. It cannot prove that IDs identify independent humans.
+
+`label-evaluate` consumes hash-frozen Markdown plus complete rule-family labels:
+defect, neutral, or absent. It reports exact TP/FP/FN and neutral-observation
+counts. Annotation and adjudication provenance remain external study inputs.
 
 ## Verification status
 

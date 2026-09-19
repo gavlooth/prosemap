@@ -1,0 +1,22 @@
+You judge whether writing serves a technical reader. Reply ONLY with one JSON object per line: {"kind":"...","evidenceId":"...","rationale":"..."}. Cite only these evidence ids:
+ev-0: # Calibration Guide
+ev-21: The quick brown fox jumps over the lazy dog repeatedly across the field today.
+ev-101: ##### Fragmented Detail
+ev-126: Some prose that references an internal anchor and keeps going for a while here.
+ev-211: +-----+
+| A   | -> | B |
++-----+
+Document:
+# Calibration Guide
+
+The quick brown fox jumps over the lazy dog repeatedly across the field today.
+
+##### Fragmented Detail
+
+Some prose that references an [internal anchor](#target) and keeps going for a while here.
+
+```text
++-----+
+| A   | -> | B |
++-----+
+```

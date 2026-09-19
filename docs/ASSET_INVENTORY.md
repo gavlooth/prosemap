@@ -8,7 +8,8 @@ This inventory separates historical research material from assets consumed by th
 | --- | --- |
 | `fixtures/md/sample.md` | Operator-selectable Markdown smoke/input fixture. |
 | `fixtures/corpus/cases.tsv` | Frozen SHA-256, route, and complete expected mechanical-rule emission sets for the `corpus` command. |
-| `fixtures/corpus/*.md` | Eight synthetic Markdown documents covering nine document/route cases. |
+| `fixtures/corpus/*.md` | Eleven synthetic Markdown documents covering twelve document/route cases, including terminology extraction, malformed delimiter/code controls, and Unicode routing. |
+| `fixtures/contextual-pilot/prompt.txt`, `responses.jsonl`, `findings.jsonl`, `reviews.jsonl`, `manifest.json` | Reproducible three-run contextual pilot and two-agent review data; explicitly non-human and non-generalizable. |
 
 The corpus assets are deterministic regression inputs authored with the
 implementation. They are not independent annotations and cannot establish

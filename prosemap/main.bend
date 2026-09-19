@@ -23,6 +23,8 @@ import ./route.bend as Rt
 import ./evaluation.bend as Eval
 import ./artifacts.bend as Art
 import ./corpus.bend as Cp
+import ./review_eval.bend as Re
+import ./label_eval.bend as Le
 
 # all rendered artifacts from one analysis pass
 type CliOut is Data:
@@ -355,8 +357,22 @@ def Cli.dispatch1(isCorpus: Bool, isGate: Bool, isContext: Bool, isEvaluate: Boo
     case False{}:
       Cli.dispatch2(isGate, isContext, isEvaluate, isLatex)
 
+def Cli.dispatch0(isReviewEvaluate: Bool, isCorpus: Bool, isGate: Bool, isContext: Bool, isEvaluate: Bool, isLatex: Bool) -> IO(Unit):
+  match isReviewEvaluate:
+    case True{}:
+      Re.Re.flow()
+    case False{}:
+      Cli.dispatch1(isCorpus, isGate, isContext, isEvaluate, isLatex)
+
+def Cli.dispatch_labels(isLabels: Bool, isReviewEvaluate: Bool, isCorpus: Bool, isGate: Bool, isContext: Bool, isEvaluate: Bool, isLatex: Bool) -> IO(Unit):
+  match isLabels:
+    case True{}:
+      Le.Le.flow()
+    case False{}:
+      Cli.dispatch0(isReviewEvaluate, isCorpus, isGate, isContext, isEvaluate, isLatex)
+
 def Cli.dispatch(+cmd: String) -> IO(Unit):
-  Cli.dispatch1(String.eq(cmd, "corpus"), String.eq(cmd, "gate"), String.eq(cmd, "context"), String.eq(cmd, "evaluate"), String.eq(cmd, "latex"))
+  Cli.dispatch_labels(String.eq(cmd, "label-evaluate"), String.eq(cmd, "review-evaluate"), String.eq(cmd, "corpus"), String.eq(cmd, "gate"), String.eq(cmd, "context"), String.eq(cmd, "evaluate"), String.eq(cmd, "latex"))
 def main() -> IO(Unit):
   do IO<Unit>:
     cmdr : Result<&1, &1, U32 & String, String> <- IO.get_env("PROSEMAP_CMD")

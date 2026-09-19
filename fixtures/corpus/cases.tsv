@@ -8,3 +8,6 @@ links.md	08d37d87ce07b88954a991da10e50a697987c3cb94d19f23a086858bba8daa87	intro	
 notation.md	545358892ced750f4212d521a59a224a9d9924e3c4bff62e28da2b994c35bd86	-	notation.case-similar
 repeated-prose.md	34dc9a1e9d2c369abb76ee439db9d33f4a273e9a5ba4787fbfad3e1925e71ea5	-	structure.expanded-duplicate
 source-patterns.md	496bd05836a984ca4315fdf80809c3b8e534b302e8c658ad563bffaa38606392	-	source.escaped-pipe,source.ascii-diagram
+boundaries.md	651126577127524fd69b2432027ce0cbbea6acc990702b8de45489ae33599536	-	-
+terminology.md	2953cbf54d9d68385d8a14ca7c02ec672477c58378ed15155fd426b8f9db91e8	-	terminology.definition,terminology.introduction-density
+unicode-route.md	10da8910953ea715532daa23ed0b411ca3f67b382bacb264910a0c3348324718	-	reference.route-edge
