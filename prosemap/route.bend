@@ -4,8 +4,10 @@
 # whole document (identity). This is the route-availability analog: content off
 # the route is treated as not-on-this-reading-path.
 #
-# NOTE: section anchors are currently `sec-<byteoffset>` (discoverable from a
-# prior run's evidence). Human-named `{#slug}` heading anchors are a follow-up.
+# A heading anchor is its authored `{#slug}` when it has one (`## Methods {#methods}`
+# -> `methods`), otherwise `sec-<byteoffset>`; the initial section is `root`. So a
+# route reads like the document's own section names, and any anchor from a prior
+# run's evidence still works.
 import Base
 import ./types.bend as T
 import ./mechanical.bend as M

@@ -61,16 +61,6 @@ def Cli.env_or(r: Result<&1, &1, U32 & String, String>, d: String) -> String:
 def Cli.out_of(+sha: String, +fs: List<&2, T.Finding>) -> CliOut:
   CliOut{Rep.Rep.render(fs), J.Json.findings_jsonl(fs), J.Json.manifest(sha, List.length(&2, T.Finding, fs))}
 
-def Cli.run(+content: String) -> CliOut:
-  +sha = S.Sha256.hex(content)
-  Cli.out_of(sha, M.Mech.analyze(4, Md.Md.parse(content, sha)))
-
-# analyze with a reviews.jsonl applied: findings with a Rejected disposition are
-# suppressed from every artifact.
-def Cli.run_reviewed(+content: String, +reviews: String) -> CliOut:
-  +sha = S.Sha256.hex(content)
-  Cli.out_of(sha, Rv.Rv.apply(Rv.Rv.rejected_ids(Rv.Rv.parse(reviews)), M.Mech.analyze(4, Md.Md.parse(content, sha))))
-
 # analyze with LLM candidates merged in and reviews applied. `cands` are the
 # already-verified contextual/model candidate findings (empty when no LLM).
 def Cli.out_merged(+content: String, +cands: List<&2, T.Finding>, +reviews: String, +route: String) -> CliOut:

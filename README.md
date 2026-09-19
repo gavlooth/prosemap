@@ -53,7 +53,7 @@ PROSEMAP_CMD=evaluate PROSEMAP_BASE_RUN=.runs/base PROSEMAP_CANDIDATE_RUN=.runs/
 
 | Command | Environment | Output |
 |---|---|---|
-| `analyze` (default) | `PROSEMAP_INPUT`, `PROSEMAP_OUTPUT`, `PROSEMAP_JSONL`, `PROSEMAP_MANIFEST`, `PROSEMAP_COMPLETE`, optional `PROSEMAP_REVIEWS` | report on stdout + three artifacts + completion marker |
+| `analyze` (default) | `PROSEMAP_INPUT`, `PROSEMAP_OUTPUT`, `PROSEMAP_JSONL`, `PROSEMAP_MANIFEST`, `PROSEMAP_COMPLETE`, optional `PROSEMAP_REVIEWS`, `PROSEMAP_READER`, `PROSEMAP_ROUTE`, `PROSEMAP_LLM_CMD` | report on stdout + three artifacts + completion marker |
 | `gate` | `PROSEMAP_BASE`, `PROSEMAP_CANDIDATE`, optional `PROSEMAP_BASE_SOURCE`, `PROSEMAP_CANDIDATE_SOURCE` | `GATE PASS/FAIL (n violation(s))` |
 | `evaluate` | `PROSEMAP_BASE`/`PROSEMAP_CANDIDATE` + both source variables, or `PROSEMAP_BASE_RUN`/`PROSEMAP_CANDIDATE_RUN` directories holding `input.md` + `findings.jsonl` | `EVALUATE PASS/FAIL (n comparison record(s))` |
 | `context` | `PROSEMAP_INPUT`, `PROSEMAP_LLM_CMD` (unset ⇒ skipped), `PROSEMAP_LLM_TIMEOUT` (ms, def 60000), `PROSEMAP_LLM_MAX_BYTES` (def 1 MiB) | evidence-verified candidate lines |
@@ -67,6 +67,22 @@ and is the pattern for pandoc-based ingestion. A failed tool probe abstains rath
 **Reviews.** `PROSEMAP_REVIEWS=reviews.jsonl` applies human dispositions during `analyze`; a line
 `{"findingRecordId":..,"disposition":"rejected|accepted|needs-context","rationale":..}` with
 `rejected` suppresses that finding from every artifact (and hence from the gate).
+
+**Reader profile and reading route.** `PROSEMAP_READER=<file>` embeds the reader's declared
+context (assumed knowledge, what is not assumed, objective) in the contextual prompt, so
+candidates are judged for that reader rather than for no one. `PROSEMAP_ROUTE=<file>` scopes
+analysis to a chosen set of section anchors, one per line: blocks whose section anchor is off the
+route are not analyzed, so the run describes the reader's actual path through the document. An
+unset or empty route is the whole document. Because off-route content is out of scope, a link
+into an off-route section is reported as unresolved — the path being analyzed cannot follow it.
+The reader profile and the route are independent: the route scopes the mechanical pass, the
+profile conditions the contextual pass.
+
+**Heading anchors.** A heading may carry an authored anchor: `## Methods {#methods}` makes
+`methods` both the section anchor and the heading's authored ID, so `[text](#methods)` resolves
+and a route can name `methods` instead of a byte offset. The marker is stripped from the heading
+text; a heading without one keeps its `sec-<byte-offset>` anchor, and `{#}` names nothing.
+Duplicate slugs are reported by `structure.duplicate-id`, like any other duplicated authored ID.
 
 Because PASS/FAIL is a stdout contract, CI wraps it, for example:
 
@@ -90,12 +106,16 @@ rename-atomic. The manifest's `sourceSha256` matches `sha256sum` of the input.
 | `contracts.bend` | evidence integrity (`Str.slice`, `Evidence.mk`, `integrity`) |
 | `utf8.bend` | Unicode scalar → UTF-8 encoding, byte length, byte-boundary slicing |
 | `sha256.bend` | pure SHA-256 over UTF-8 bytes (vector-verified) |
-| `markdown.bend` | Markdown → `Block` list with UTF-8 byte offsets, section anchors, links, math/TeX |
+| `markdown.bend` | Markdown → `Block` list with UTF-8 byte offsets, `{#slug}`/offset section anchors, links, math/TeX |
 | `mechanical.bend` | all 12 deterministic rules, including the command-aware TeX tokenizer |
 | `cohesion.bend` | Jaccard / multiset-Dice as exact rationals |
+| `route.bend` | reading-route scoping: keep only blocks whose section anchor is on the route |
+| `reviews.bend` | human dispositions from `reviews.jsonl`; `rejected` suppresses a finding |
 | `comparison.bend` | diff by `recordId` (`compare`) and rule/anchor grouping with conservative `unmatched` (`compare2`) |
 | `gate.bend` | CI gate over newly added allowlisted observations, plus replay verification |
 | `evaluation.bend` | comparison + replay-verified gate over two runs |
+| `exec.bend` | the subprocess FFI shim (`effs/exec.js`) used by the `latex` and `context` stages |
+| `latex.bend` | TeX snippets extracted from blocks → `formula.unparsable` findings via `PROSEMAP_KATEX_CMD` |
 | `contextual.bend` | contextual requests, loopback TCP transport, evidence re-verification |
 | `json.bend` / `json_read.bend` | deterministic JSON emit / targeted findings reader |
 | `report.bend` | findings → Markdown report |
@@ -133,7 +153,7 @@ bend prosemap/utf8_test.bend          # multibyte lengths, slicing, hashing
 bend prosemap/mech_test.bend          # mechanical rules
 bend prosemap/mech_test2.bend         # per-section metrics
 bend prosemap/mech_test3.bend         # newer rules
-bend prosemap/md_test.bend            # Markdown → findings
+bend prosemap/md_test.bend            # Markdown → blocks, findings, {#slug} anchors
 bend prosemap/math_test.bend          # Markdown math + TeX command tokenizer
 bend prosemap/gate_test.bend          # gate behavior
 bend prosemap/cmp2_test.bend          # comparison grouping

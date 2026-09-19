@@ -328,14 +328,14 @@ def Md.add_tex(b: T.Block, tex: List<&2, T.Tex>) -> T.Block:
 
 def Md.eid(start: U32) -> String:
   "ev-" ++ Nat.show(U32.to_nat(start))
-def Md.block(+tag: String, kind: T.BlockKind, evk: T.EvidenceKind, level: Maybe<&2, U32>, +start: U32, end: U32, +text: String, +sec: String, docsha: String, +src: String) -> T.Block:
+def Md.block(+tag: String, kind: T.BlockKind, evk: T.EvidenceKind, level: Maybe<&2, U32>, +start: U32, end: U32, +text: String, +sec: String, +authored: Maybe<&2, String>, docsha: String, +src: String) -> T.Block:
   +sid = Nat.show(U32.to_nat(start))
   +eid = Md.eid(start)
   +links = Md.links(text, eid)
   ev = C.Evidence.mk(eid, docsha, "input.md", start, end, text, {T.Anchor{sec, None{}} : T.Anchor}, evk, src)
-  T.Block{"blk-" ++ sid, kind, tag, sec, None{}, level, [], text, True{}, [ev], links, []}
-def Md.inline_block(+tag: String, kind: T.BlockKind, evk: T.EvidenceKind, level: Maybe<&2, U32>, +start: U32, end: U32, +text: String, +sec: String, docsha: String, +src: String) -> T.Block:
-  Md.add_tex(Md.block(tag, kind, evk, level, start, end, text, sec, docsha, src), Md.tex(text, Md.eid(start)))
+  T.Block{"blk-" ++ sid, kind, tag, sec, authored, level, [], text, True{}, [ev], links, []}
+def Md.inline_block(+tag: String, kind: T.BlockKind, evk: T.EvidenceKind, level: Maybe<&2, U32>, +start: U32, end: U32, +text: String, +sec: String, +authored: Maybe<&2, String>, docsha: String, +src: String) -> T.Block:
+  Md.add_tex(Md.block(tag, kind, evk, level, start, end, text, sec, authored, docsha, src), Md.tex(text, Md.eid(start)))
 
 
 def Md.htag(h: Nat) -> String:
@@ -345,18 +345,88 @@ def Md.htag(h: Nat) -> String:
 def Md.heading_sec(offset: U32) -> String:
   "sec-" ++ Nat.show(U32.to_nat(offset))
 
+# --- {#slug} heading anchors -----------------------------------------------
+# `## Methods {#methods}` -> section anchor + authored id "methods", slug
+# stripped from the title. Human-named anchors make routes and links readable.
+def Md.after2(fuel: Nat, +hay: String, +needle: String) -> Maybe<&2, String>:
+  match fuel:
+    case 0n:
+      None{}
+    case 1n+p:
+      Bool.pick(Maybe<&2, String>, String.starts_with(hay, needle),
+        Some{String.drop(hay, String.length(needle))},
+        Md.after2(p, String.drop(hay, 1n), needle))
+
+def Md.until_brace(s: String) -> String:
+  match s:
+    case SNil{}:
+      ""
+    case SCon{+c, t}:
+      Bool.pick(String, U32.is_eq(Char.to_u32(c), 125), "", SCon{c, Md.until_brace(t)})
+
+# `{#}` names nothing: an empty slug is None, so the section keeps its offset
+# anchor instead of collapsing every following block onto an empty anchor.
+def Md.slug_of(+s: String) -> Maybe<&2, String>:
+  Bool.pick(Maybe<&2, String>, String.is_empty(s), None{}, Some{s})
+
+def Md.slug_pick(m: Maybe<&2, String>) -> Maybe<&2, String>:
+  match m:
+    case None{}:
+      None{}
+    case Some{rest}:
+      Md.slug_of(Md.until_brace(rest))
+
+# the {#slug} of a heading line, or None
+def Md.line_slug(+line: String) -> Maybe<&2, String>:
+  Md.slug_pick(Md.after2(String.length(line), line, "{#"))
+
+def Md.hc_pick(m: Maybe<&2, Char>) -> Char:
+  match m:
+    case Some{c}:
+      c
+    case None{}:
+      Chr{32}
+
+def Md.head_char(s: String) -> Char:
+  Md.hc_pick(String.get(s, 0n))
+
+# prefix of s before the first occurrence of needle (whole s if absent)
+def Md.before_needle(fuel: Nat, +s: String, +needle: String) -> String:
+  match fuel:
+    case 0n:
+      ""
+    case 1n+p:
+      Bool.pick(String, Bool.or(String.is_empty(s), String.starts_with(s, needle)),
+        "",
+        SCon{Md.head_char(s), Md.before_needle(p, String.drop(s, 1n), needle)})
+
+# title with any trailing {#slug} removed
+def Md.strip_slug(+title: String) -> String:
+  Md.trim(Md.before_needle(String.length(title), title, "{#"))
+
+def Md.hn_pick(m: Maybe<&2, String>, offset: U32) -> String:
+  match m:
+    case Some{s}:
+      s
+    case None{}:
+      Md.heading_sec(offset)
+
+# the section anchor a heading opens: its {#slug}, else sec-<offset>
+def Md.heading_nsec(+line: String, +offset: U32) -> String:
+  Md.hn_pick(Md.line_slug(line), offset)
+
 def Md.heading_block(+line: String, +offset: U32, len: U32, +sec: String, docsha: String, +src: String) -> List<&2, T.Block>:
   +h = Md.hcount(line)
-  [ Md.inline_block(Md.htag(h), T.BkHeading{}, T.EvHeading{}, Some{U32.from_nat(h)}, offset, U32.add(offset, len), Md.trim(String.drop(line, h)), sec, docsha, src) ]
+  [ Md.inline_block(Md.htag(h), T.BkHeading{}, T.EvHeading{}, Some{U32.from_nat(h)}, offset, U32.add(offset, len), Md.strip_slug(Md.trim(String.drop(line, h))), sec, Md.line_slug(line), docsha, src) ]
 
 def Md.para_block(buf: String, +start: U32, pend: U32, +sec: String, docsha: String, +src: String) -> List<&2, T.Block>:
-  [ Md.inline_block("p", T.BkProse{}, T.EvProse{}, None{}, start, pend, buf, sec, docsha, src) ]
+  [ Md.inline_block("p", T.BkProse{}, T.EvProse{}, None{}, start, pend, buf, sec, None{}, docsha, src) ]
 
 def Md.code_block(buf: String, +start: U32, cend: U32, +sec: String, docsha: String, +src: String) -> List<&2, T.Block>:
-  [ Md.block("pre", T.BkPre{}, T.EvSourcePattern{}, None{}, start, cend, buf, sec, docsha, src) ]
+  [ Md.block("pre", T.BkPre{}, T.EvSourcePattern{}, None{}, start, cend, buf, sec, None{}, docsha, src) ]
 
 def Md.math_block(+buf: String, +start: U32, mend: U32, +sec: String, docsha: String, +src: String) -> List<&2, T.Block>:
-  [ Md.add_tex(Md.block("math", T.BkMath{}, T.EvTex{}, None{}, start, mend, buf, sec, docsha, src), Md.tex_push(buf, True{}, Md.eid(start), Nil{})) ]
+  [ Md.add_tex(Md.block("math", T.BkMath{}, T.EvTex{}, None{}, start, mend, buf, sec, None{}, docsha, src), Md.tex_push(buf, True{}, Md.eid(start), Nil{})) ]
 
 # ---------------------------------------------------------------------------
 # per-line dispatch (non-recursive; returns a Step)
@@ -367,7 +437,7 @@ def Md.normal(lc: LC, +line: String, +offset: U32, len: U32, +noff: U32, +cur: S
     case LcFence{}:
       Step{Nil{}, MdCode{"", noff, noff, cur, Md.is_math_fence(line)}, cur}
     case LcHeading{}:
-      +nsec = Md.heading_sec(offset)
+      +nsec = Md.heading_nsec(line, offset)
       Step{Md.heading_block(line, offset, len, nsec, docsha, src), MdNone{}, nsec}
     case LcBlank{}:
       Step{Nil{}, MdNone{}, cur}
@@ -380,7 +450,7 @@ def Md.para(lc: LC, +line: String, +buf: String, +start: U32, pend: U32, +psec: 
     case LcFence{}:
       Step{Md.para_block(buf, start, pend, psec, docsha, src), MdCode{"", noff, noff, cur, Md.is_math_fence(line)}, cur}
     case LcHeading{}:
-      +nsec = Md.heading_sec(offset)
+      +nsec = Md.heading_nsec(line, offset)
       Step{List.append(&2, T.Block, Md.para_block(buf, start, pend, psec, docsha, src), Md.heading_block(line, offset, len, nsec, docsha, src)), MdNone{}, nsec}
     case LcBlank{}:
       Step{Md.para_block(buf, start, pend, psec, docsha, src), MdNone{}, cur}
