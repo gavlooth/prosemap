@@ -30,21 +30,22 @@ Operational boundaries:
 
 The Bend core has no argument API, so `bin/prosemap` provides the normal
 human-facing command line and keeps the internal environment protocol hidden.
-Run it directly:
+Install it for the current user:
 
 ```sh
-./bin/prosemap --help
+./install.sh
 ```
 
-Or put it on your path:
+This creates `~/.local/bin/prosemap` as a symlink to the repository launcher,
+verifies that it runs, and leaves unrelated existing files untouched. Choose a
+different user-writable directory when needed:
 
 ```sh
-mkdir -p ~/.local/bin
-ln -sf "$(pwd)/bin/prosemap" ~/.local/bin/prosemap
+./install.sh --bin-dir ~/bin
 ```
 
-The wrapper finds `bend` on `PATH`, then falls back to
-`~/.bend/bin/bend`.
+The launcher finds `bend` on `PATH`, then falls back to
+`~/.bend/bin/bend`. Run `./bin/prosemap --help` without installing.
 
 ## Analyze a document
 

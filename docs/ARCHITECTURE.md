@@ -33,6 +33,7 @@ status for runtime errors.
 
 | Module(s) | Responsibility | Boundary and limits |
 | --- | --- | --- |
+| `install.sh` | User-local installation | Creates and verifies a symlink in `~/.local/bin` or `--bin-dir`; refuses unrelated existing targets unless `--force` is explicit. |
 | `bin/prosemap` | Public command-line interface | Parses positional commands and flags, isolates invocations from inherited `PROSEMAP_*` variables, and translates Bend policy output into exit status. |
 | `prosemap/types.bend` | Core algebraic data types for blocks, evidence, findings, metrics, and comparisons | Defines the in-memory records; it does not validate general JSON. |
 | `prosemap/utf8.bend`, `prosemap/sha256.bend`, `prosemap/contracts.bend` | UTF-8 byte operations, pure SHA-256, evidence construction and re-verification | Evidence spans are UTF-8 byte offsets and excerpts are re-sliced from source. |

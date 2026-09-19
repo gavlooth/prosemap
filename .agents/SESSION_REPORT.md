@@ -132,3 +132,19 @@ Signature: openai-codex/gpt-6-astra
 - Dependencies/restart requirements: Bend 2.0.5; no restart required.
 
 Signature: openai-codex/gpt-6-astra
+
+## 2026-09-19T13:49:07+03:00 — User-local installer added and executed
+
+- Objective: add an installation script for the human-facing Prosemap command and run it on the workstation.
+- Workspace: `/home/heefoo/Documents/code/prosemap`; based on published `main` commit `91da5058`.
+- Changes: added executable `install.sh`; default target is `~/.local/bin/prosemap`, with `--bin-dir`, `--force`, and help support. Installation uses an absolute symlink to the repository launcher, verifies the installed command, is idempotent, and refuses to replace unrelated existing files unless `--force` is explicit. Updated README installation instructions and the architecture boundary table.
+- Implementation coverage: 100% of the requested installer and local installation.
+- Commands run: `sh -n install.sh`; `./install.sh --help`; `./install.sh`; `which prosemap`; `prosemap help`; `prosemap corpus`; second `./install.sh` idempotence check; isolated existing-file refusal and explicit-force replacement checks.
+- Key results: installed `/home/heefoo/.local/bin/prosemap -> /home/heefoo/Documents/code/prosemap/bin/prosemap`; the directory is already on PATH; the installed command prints help and the full corpus ends in `CORPUS PASS`; rerunning reports “already installed”; an unrelated target was preserved with exit 1, while explicit `--force` replaced it and verified the resulting launcher.
+- Negative memory: copying `bin/prosemap` into another directory would break its repository-relative root discovery. The installer deliberately creates a symlink, and the launcher resolves that symlink before locating `prosemap/main.bend`.
+- Current recommendation: run `./install.sh` once per checkout location, then use `prosemap <document.md>`.
+- Unresolved issues: none.
+- Next actions: none.
+- Dependencies/restart requirements: `~/.local/bin` must be on PATH; it already is on this workstation. No restart required.
+
+Signature: openai-codex/gpt-6-astra
