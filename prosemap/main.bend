@@ -19,6 +19,7 @@ import ./contextual.bend as Ctx
 import ./exec.bend as E
 import ./latex.bend as Lx
 import ./reviews.bend as Rv
+import ./route.bend as Rt
 import ./evaluation.bend as Eval
 import ./artifacts.bend as Art
 
@@ -70,6 +71,33 @@ def Cli.run_reviewed(+content: String, +reviews: String) -> CliOut:
   +sha = S.Sha256.hex(content)
   Cli.out_of(sha, Rv.Rv.apply(Rv.Rv.rejected_ids(Rv.Rv.parse(reviews)), M.Mech.analyze(4, Md.Md.parse(content, sha))))
 
+# analyze with LLM candidates merged in and reviews applied. `cands` are the
+# already-verified contextual/model candidate findings (empty when no LLM).
+def Cli.out_merged(+content: String, +cands: List<&2, T.Finding>, +reviews: String, +route: String) -> CliOut:
+  +sha = S.Sha256.hex(content)
+  +mech = M.Mech.analyze(4, Rt.Route.apply(Rt.Route.parse(route), Md.Md.parse(content, sha)))
+  Cli.out_of(sha, Rv.Rv.apply(Rv.Rv.rejected_ids(Rv.Rv.parse(reviews)), List.append(&2, T.Finding, mech, cands)))
+
+# run the configured LLM CLI over a prompt, yielding "" on unset/failure.
+def Cli.llm_resp(rr: Result<&1, &1, U32 & String, String>) -> IO(String):
+  match rr:
+    case Fail{e}:
+      IO.pure(String, "")
+    case Done{s}:
+      IO.pure(String, s)
+
+def Cli.llm_run(+cmd: String, prompt: String) -> IO(String):
+  do IO<String>:
+    rr : Result<&1, &1, U32 & String, String> <- E.Exec.run(cmd, prompt, 60000, 1048576)
+    Cli.llm_resp(rr)
+
+def Cli.maybe_llm(m: Maybe<&2, String>, prompt: String) -> IO(String):
+  match m:
+    case None{}:
+      IO.pure(String, "")
+    case Some{cmd}:
+      Cli.llm_run(cmd, prompt)
+
 # tuple projection must live in a plain def body (destructuring-let is not a
 # valid do-block statement).
 def Cli.read_finish(rd: File & Result<&1, &1, U32 & String, String>) -> IO(String):
@@ -109,9 +137,18 @@ def Cli.analyze_flow() -> IO(Unit):
     inr : Result<&1, &1, U32 & String, String> <- IO.get_env("PROSEMAP_INPUT")
     f : File <- IO.try(File, File.open(Cli.env_or(inr, "input.md"), "r"))
     content : String <- Cli.read_all(f)
+    +cc : String = content
     rvr : Result<&1, &1, U32 & String, String> <- IO.get_env("PROSEMAP_REVIEWS")
     reviews : String <- Cli.read_opt(Cli.env_m(rvr))
-    +out : CliOut = Cli.run_reviewed(content, reviews)
+    rdr : Result<&1, &1, U32 & String, String> <- IO.get_env("PROSEMAP_READER")
+    reader : String <- Cli.read_opt(Cli.env_m(rdr))
+    +req : Ctx.CtxReq = Ctx.Ctx.prepare(reader, cc)
+    lcr : Result<&1, &1, U32 & String, String> <- IO.get_env("PROSEMAP_LLM_CMD")
+    resp : String <- Cli.maybe_llm(Cli.env_m(lcr), Ctx.CtxReq.prompt(req))
+    +cands : List<&2, T.Finding> = Ctx.Ctx.candidates(Ctx.CtxReq.evs(req), resp)
+    rtr : Result<&1, &1, U32 & String, String> <- IO.get_env("PROSEMAP_ROUTE")
+    route : String <- Cli.read_opt(Cli.env_m(rtr))
+    +out : CliOut = Cli.out_merged(cc, cands, reviews, route)
     +report : String = CliOut.report(out)
     +jsonl : String = CliOut.jsonl(out)
     +manifest : String = CliOut.manifest(out)
@@ -213,23 +250,25 @@ def Cli.u32_or(r: Result<&1, &1, U32 & String, String>, d: U32) -> U32:
 # document, keep only candidates citing a source-verified evidence id.
 # Unset command -> stage is skipped. Any CLI failure/timeout -> abstain.
 
-def Cli.context_emit(rr: Result<&1, &1, U32 & String, String>, ids: List<&2, String>) -> IO(Unit):
+def Cli.context_emit(rr: Result<&1, &1, U32 & String, String>, evs: List<&2, T.Evidence>) -> IO(Unit):
   match rr:
     case Fail{e}:
       IO.print("contextual: provider CLI failed or timed out; stage abstains")
     case Done{resp}:
-      IO.print("contextual candidates (evidence-verified):\n" ++ Ctx.Ctx.accept(ids, resp))
+      IO.print("contextual candidate findings (evidence-verified):\n" ++ J.Json.findings_jsonl(Ctx.Ctx.candidates(evs, resp)))
 
 def Cli.context_run(+cmd: String) -> IO(Unit):
   do IO<Unit>:
     inr : Result<&1, &1, U32 & String, String> <- IO.get_env("PROSEMAP_INPUT")
     f : File <- IO.try(File, File.open(Cli.env_or(inr, "input.md"), "r"))
     content : String <- Cli.read_all(f)
-    +req : Ctx.CtxReq = Ctx.Ctx.prepare(content)
+    rdr : Result<&1, &1, U32 & String, String> <- IO.get_env("PROSEMAP_READER")
+    reader : String <- Cli.read_opt(Cli.env_m(rdr))
+    +req : Ctx.CtxReq = Ctx.Ctx.prepare(reader, content)
     tr : Result<&1, &1, U32 & String, String> <- IO.get_env("PROSEMAP_LLM_TIMEOUT")
     br : Result<&1, &1, U32 & String, String> <- IO.get_env("PROSEMAP_LLM_MAX_BYTES")
     rr : Result<&1, &1, U32 & String, String> <- E.Exec.run(cmd, Ctx.CtxReq.prompt(req), Cli.u32_or(tr, 60000), Cli.u32_or(br, 1048576))
-    Cli.context_emit(rr, Ctx.CtxReq.ids(req))
+    Cli.context_emit(rr, Ctx.CtxReq.evs(req))
 
 def Cli.context_go(m: Maybe<&2, String>) -> IO(Unit):
   match m:

@@ -97,19 +97,25 @@ def Ctx.http_body(+resp: String) -> String:
 # Correctness rests on the evidence check, not on schema conformance.
 # ===========================================================================
 
-# the prepared request: the prompt to send + the set of citable, verified ids
+# the prepared request: the prompt, the citable verified ids, and the verified
+# evidence objects (kept so accepted candidates can cite a real Evidence).
 type CtxReq is Data:
-  CtxReq{prompt: String, ids: List<&2, String>}
+  CtxReq{prompt: String, ids: List<&2, String>, evs: List<&2, T.Evidence>}
 
 def CtxReq.prompt(r: CtxReq) -> String:
   match r:
-    case CtxReq{prompt, ids}:
+    case CtxReq{prompt, ids, evs}:
       prompt
 
 def CtxReq.ids(r: CtxReq) -> List<&2, String>:
   match r:
-    case CtxReq{prompt, ids}:
+    case CtxReq{prompt, ids, evs}:
       ids
+
+def CtxReq.evs(r: CtxReq) -> List<&2, T.Evidence>:
+  match r:
+    case CtxReq{prompt, ids, evs}:
+      evs
 
 def Ctx.ev_id(e: T.Evidence) -> String:
   match e:
@@ -145,16 +151,19 @@ def Ctx.cite_lines(evs: List<&2, T.Evidence>) -> String:
     case Con{e, t}:
       Ctx.cite_line(e) ++ Ctx.cite_lines(t)
 
-def Ctx.prompt(evs: List<&2, T.Evidence>, +content: String) -> String:
-  "Reply ONLY with one JSON object per line: {\"kind\":\"...\",\"evidenceId\":\"...\",\"rationale\":\"...\"}.\nCite only these evidence ids:\n" ++
+# the prompt embeds the reader profile (assumed / not-assumed knowledge,
+# objective) so candidates are judged for THIS reader.
+def Ctx.prompt(+reader: String, evs: List<&2, T.Evidence>, +content: String) -> String:
+  "You judge whether the writing serves this reader.\n--- reader profile ---\n" ++ reader ++
+  "\n--- task ---\nReply ONLY with one JSON object per line: {\"kind\":\"...\",\"evidenceId\":\"...\",\"rationale\":\"...\"}.\nCite only these evidence ids:\n" ++
   Ctx.cite_lines(evs) ++ "\n--- document ---\n" ++ content
 
 # prepare the request from the raw Markdown content: parse, gather evidence,
-# re-verify it against the source, and expose the verified citable ids.
-def Ctx.prepare(+content: String) -> CtxReq:
+# re-verify it against the source, and expose the verified citable ids + objects.
+def Ctx.prepare(+reader: String, +content: String) -> CtxReq:
   +sha = S.Sha256.hex(content)
   +verified = Ctx.verify(content, sha, Ctx.all_ev(Md.Md.parse(content, sha)))
-  CtxReq{Ctx.prompt(verified, content), Ctx.ev_ids(verified)}
+  CtxReq{Ctx.prompt(reader, verified, content), Ctx.ev_ids(verified), verified}
 
 # --- response filtering: keep candidate lines citing a verified id ----------
 def Ctx.keep_line(inSet: Bool, line: String, rest: List<&2, String>) -> List<&2, String>:
@@ -191,3 +200,51 @@ def Ctx.accept_show(empty: Bool, kept: List<&2, String>) -> String:
 def Ctx.accept(+valid: List<&2, String>, +response: String) -> String:
   +kept = Ctx.filter(valid, String.lines(response))
   Ctx.accept_show(Nat.is_eq(List.length(&2, String, kept), 0n), kept)
+
+# ===========================================================================
+# LLM candidates -> findings (merged into the artifacts). Each accepted line
+# (citing a source-verified evidence id) becomes an advisory contextual/model
+# candidate finding. Model-origin candidates are never gate-eligible.
+# ===========================================================================
+def Ctx.fev_pick(hit: Bool, e: T.Evidence, rec: Maybe<&2, T.Evidence>) -> Maybe<&2, T.Evidence>:
+  match hit:
+    case True{}:
+      Some{e}
+    case False{}:
+      rec
+
+def Ctx.find_ev(evs: List<&2, T.Evidence>, +id: String) -> Maybe<&2, T.Evidence>:
+  match evs:
+    case Nil{}:
+      None{}
+    case Con{+e, t}:
+      Ctx.fev_pick(String.eq(Ctx.ev_id(e), id), e, Ctx.find_ev(t, id))
+
+def Ctx.mk_candidate(ev: T.Evidence, +kindstr: String, +rationale: String, +eid: String) -> T.Finding:
+  +fp = S.Sha256.hex("contextual#" ++ kindstr ++ "#" ++ eid ++ "#" ++ rationale)
+  T.Finding{
+    "contextual:" ++ String.take(fp, 20n),
+    T.RuleRef{"contextual.model", "1"},
+    T.Contextual{}, T.Model{}, T.Candidate{},
+    "Contextual candidate",
+    kindstr ++ ": " ++ rationale,
+    [ev], fp, None{},
+  }
+
+def Ctx.cand_join(m: Maybe<&2, T.Evidence>, +l: String, rest: List<&2, T.Finding>) -> List<&2, T.Finding>:
+  match m:
+    case None{}:
+      rest
+    case Some{ev}:
+      Ctx.mk_candidate(ev, Jr.Jr.field(l, "kind"), Jr.Jr.field(l, "rationale"), Jr.Jr.field(l, "evidenceId")) <> rest
+
+def Ctx.candidates_go(+evs: List<&2, T.Evidence>, lines: List<&2, String>) -> List<&2, T.Finding>:
+  match lines:
+    case Nil{}:
+      Nil{}
+    case Con{+l, t}:
+      Ctx.cand_join(Ctx.find_ev(evs, Jr.Jr.field(l, "evidenceId")), l, Ctx.candidates_go(evs, t))
+
+# accepted candidate findings from a raw provider response + verified evidence
+def Ctx.candidates(+evs: List<&2, T.Evidence>, +response: String) -> List<&2, T.Finding>:
+  Ctx.candidates_go(evs, String.lines(response))
