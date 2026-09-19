@@ -16,8 +16,8 @@ comprehension.
 
 ## Frozen Markdown emission regression
 
-`PROSEMAP_CMD=corpus bend prosemap/main.bend` reads
-`fixtures/corpus/cases.tsv` plus its Markdown documents. Each row freezes the
+`prosemap corpus` reads `fixtures/corpus/cases.tsv` plus its Markdown
+documents. Each row freezes the
 document SHA-256, route, and complete expected set of emitted mechanical rule
 IDs. The evaluator rejects malformed rows, unknown rule IDs, duplicate
 document/route keys, unsafe filenames, missing documents, and hash mismatches.
@@ -46,7 +46,7 @@ expectations, not real-world defect accuracy.
 
 ## Adjudicated mechanical labels
 
-`PROSEMAP_CMD=label-evaluate` reads a required `PROSEMAP_LABEL_DIR`. Its
+`prosemap label-evaluate <label-directory>` reads that directory. Its
 `labels.tsv` rows contain document, SHA-256, route, defect-rule set, and
 neutral-rule set; every unlisted rule is labeled absent. The evaluator verifies
 hashes and schema, distinguishes neutral observations from defects, and reports
@@ -60,7 +60,7 @@ asserted inputs. No bundled label set is called independent.
 
 ## Contextual review pilot
 
-`PROSEMAP_CMD=review-evaluate` filters `contextual.model@1` findings and
+`prosemap review-evaluate <findings.jsonl> <reviews.jsonl>` filters `contextual.model@1` findings and
 requires at least two distinct reviewer IDs per finding. It reports consensus
 accepted, rejected, needs-context, and disagreement counts, and fails on
 malformed rows, orphan reviews, duplicate reviewer/finding pairs, or incomplete

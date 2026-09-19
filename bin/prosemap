@@ -52,7 +52,6 @@ need_arg() {
 
 run_status() {
   expected=$1
-  shift
   set +e
   output=$("$BEND" "$MAIN" 2>&1)
   status=$?
@@ -62,7 +61,7 @@ run_status() {
     return "$status"
   fi
   case "$output" in
-    *"$expected"*) return 0 ;;
+    *"$expected") return 0 ;;
     *) return 1 ;;
   esac
 }

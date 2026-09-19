@@ -114,3 +114,21 @@ Signature: openai-codex/gpt-6-astra
 - Dependencies, blockers, restart requirements: Bend 2.0.5 at `/home/heefoo/.bend/bin/bend`; a configured production provider is required only for the external contextual study. No restart required.
 
 Signature: openai-codex/gpt-6-astra
+
+## 2026-09-19T13:33:20+03:00 — Human-facing positional CLI added
+
+- Objective: replace the environment-variable-first user experience after the user correctly rejected it as unsuitable for normal human use.
+- Workspace: `/home/heefoo/Documents/code/prosemap`; based on published `main` commit `fef4adaf`.
+- Changes: added executable `bin/prosemap`, a POSIX argument parser supporting direct `prosemap FILE`, `analyze`, `context`, `latex`, `gate`, `evaluate`, `corpus`, `label-evaluate`, and `review-evaluate`; added ordinary flags for output, route, reader profile, reviews, model command, TeX command, timeout, and output limit; default analysis artifacts now go to `.prosemap/<input-name>/`; inherited `PROSEMAP_*` variables are cleared so arguments are authoritative; policy PASS/FAIL is translated to exit status 0/1 and CLI misuse to 2; `.prosemap/` is ignored.
+- Documentation: rewrote README usage around the positional command, installation symlink, artifact locations, options, and normal exit behavior; documented the wrapper/private-Bend boundary in architecture; changed evaluation examples to public CLI commands.
+- Implementation coverage: 100% of the requested usability correction. Environment variables remain only as the private adapter between `bin/prosemap` and Bend, not as the user interface.
+- Commands run: `sh -n bin/prosemap`; `bin/prosemap help`; `bin/prosemap corpus`; direct document analysis from `/tmp` with explicit output; symlink invocation with spaces in source/output paths and hostile inherited `PROSEMAP_CMD`/`PROSEMAP_INPUT`; expected usage errors; a deliberately failing gate; saved contextual review replay; README search for public `PROSEMAP_*` examples.
+- Key results: `prosemap document.md --out DIR` returned 0 and created report, findings, manifest, and completion marker; symlink/path-with-spaces analysis returned 0 and ignored inherited variables; deliberate gate failure printed `GATE FAIL (1 violation(s))` and returned 1; missing/unknown command cases returned 2; corpus and saved review replay returned PASS.
+- Concurrent-session note: the previously scheduled Claude pane auto-resumed at 13:30 despite the earlier cancellation, observed the same shared working tree, committed the launcher/README/architecture as `594dfedf`, and pushed it. Jujutsu imported that Git commit as the working-copy parent; remaining isolation, exact status matching, ignore, and evaluation-doc changes were preserved as follow-up work. The pane is now idle and was sent Escape again.
+- Negative memory: exposing Bend's lack of argv as a requirement for users was an implementation leak. The public shell wrapper is the compatibility layer; documentation must not teach the private environment protocol as the primary interface.
+- Current recommendation: install `bin/prosemap` on `PATH` and use `prosemap document.md`; reserve direct `bend prosemap/main.bend` invocation for internal development.
+- Unresolved issues: none for the requested CLI usability change. `shellcheck` is not installed, so verification used POSIX `sh -n` plus behavioral execution.
+- Next actions: none.
+- Dependencies/restart requirements: Bend 2.0.5; no restart required.
+
+Signature: openai-codex/gpt-6-astra
